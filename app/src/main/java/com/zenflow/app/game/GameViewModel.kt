@@ -96,10 +96,29 @@ class GameViewModel(
         currentDailyEpochDay?.let { epochDay -> loadDailyChallenge(epochDay); return }
         currentLevelId?.let { loadLevel(it) }
     }
+    fun clearColorPath(color: PuzzleColor) {
+        val board = _uiState.value.board ?: return
+        val node = board.nodes.firstOrNull { it.color == color } ?: return
+        val updatedBoard = board.withPath(color, listOf(node.cell))
+        _uiState.value = _uiState.value.copy(
+            board = updatedBoard,
+            connectedColors = _uiState.value.connectedColors - color
+        )
+    }
 
     fun onNodeTouched(color: PuzzleColor, cell: Cell) {
         val board = _uiState.value.board ?: return
-        val updatedBoard = board.withPath(color, listOf(cell))
+        val existingPath = board.paths[color].orEmpty()
+        val indexInPath = existingPath.indexOf(cell)
+
+        val updatedBoard = if (indexInPath != -1) {
+            // La celda ya es parte del camino de este color (nodo o intermedia,
+            // incluye el caso donde el gesto se canceló al salir del tablero):
+            // recorta el camino hasta ahí en vez de reiniciarlo a 1 celda.
+            board.withPath(color, existingPath.subList(0, indexInPath + 1))
+        } else {
+            board.withPath(color, listOf(cell))
+        }
         _uiState.value = _uiState.value.copy(board = updatedBoard, activeColor = color)
     }
 

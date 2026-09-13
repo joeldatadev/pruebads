@@ -52,9 +52,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
+import com.zenflow.domain.repository.GameSettings
 import com.zenflow.domain.model.PuzzleColor
 import com.zenflow.domain.repository.DailyChallengeRepository
 import com.zenflow.domain.repository.ProgressRepository
+import com.zenflow.domain.repository.SettingsRepository
 import kotlinx.coroutines.launch
 
 @Composable
@@ -63,6 +65,7 @@ fun GameScreen(
     levelRepository: LevelRepositoryImpl,
     progressRepository: ProgressRepository,
     dailyChallengeRepository: DailyChallengeRepository,
+    settingsRepository: SettingsRepository,
     infiniteSeed: Long? = null,
     dailyEpochDay: Long? = null,
     onNextLevel: () -> Unit = {},
@@ -77,6 +80,11 @@ fun GameScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val hapticController = remember { HapticController(context) }
+
+    val settings by settingsRepository.observeSettings().collectAsState(initial = GameSettings())
+    LaunchedEffect(settings.hapticsEnabled) {
+        hapticController.enabled = settings.hapticsEnabled
+    }
 
     remember(levelId, infiniteSeed, dailyEpochDay) {
         when {
@@ -132,8 +140,16 @@ fun GameScreen(
                         TextButton(onClick = onBackToLevelSelect) {
                             Text(if (dailyEpochDay != null) "← Salir" else "← Niveles")
                         }
-                        if (dailyEpochDay != null) {
-                            Text("🔥 Reto Diario", color = Color(0xFFFFD700))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (dailyEpochDay != null) {
+                                Text("🔥 Reto Diario  ", color = Color(0xFFFFD700))
+                            }
+                            val totalColors = uiState.board?.nodes?.map { it.color }?.distinct()?.size ?: 0
+                            Text(
+                                "${uiState.connectedColors.size}/$totalColors",
+                                color = Color(0xFF00E5FF),
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
                         }
                         IconButton(onClick = {
                             hapticController.onInvalidMove()
@@ -165,7 +181,8 @@ fun GameScreen(
                                 val afterLen = color?.let { viewModel.uiState.value.board?.paths?.get(it)?.size } ?: 0
                                 if (afterLen > beforeLen) hapticController.onCellAdded(afterLen)
                             },
-                            onDragEnd = viewModel::onDragEnd
+                            onDragEnd = viewModel::onDragEnd,
+                            onClearColor = { color -> viewModel.clearColorPath(color) }
                         )
 
                         LevelCompleteOverlay(
@@ -210,11 +227,14 @@ private fun BoardLayers(
     activeColor: PuzzleColor?,
     onNodeTouched: (PuzzleColor, Cell) -> Unit,
     onDrag: (List<Cell>) -> Unit,
-    onDragEnd: () -> Unit
+    onDragEnd: () -> Unit,
+    onClearColor: (PuzzleColor) -> Unit
 ) {
     var cellSizePx by remember { mutableFloatStateOf(0f) }
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
     var lastRawPosition by remember { mutableStateOf<Offset?>(null) }
+    var lastTapTime by remember { mutableStateOf(0L) }
+    var lastTapCell by remember { mutableStateOf<Cell?>(null) }
 
     fun offsetToCell(offset: Offset): Cell? {
         if (cellSizePx <= 0f) return null
@@ -263,15 +283,25 @@ private fun BoardLayers(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(boardKey) {
-                    // awaitEachGesture + drag() en vez de detectDragGestures: esta última
-                    // aplica "touch slop" (umbral mínimo antes de reconocer el arrastre),
-                    // lo que hace que el inicio del trazo se sienta con retraso. drag()
-                    // sigue el dedo desde el primer píxel de contacto, sin ese umbral.
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val cell = offsetToCell(down.position)
-                        val node = cell?.let { c -> board.nodes.firstOrNull { it.cell == c } }
-                        if (node != null) onNodeTouched(node.color, cell)
+                        val now = System.currentTimeMillis()
+
+                        if (cell != null) {
+                            val node = board.nodes.firstOrNull { it.cell == cell }
+                            val isDoubleTap = node != null && cell == lastTapCell && (now - lastTapTime) < 300
+                            lastTapTime = now
+                            lastTapCell = cell
+
+                            if (isDoubleTap && node != null) {
+                                onClearColor(node.color)
+                            } else {
+                                val ownerColor = board.paths.entries.firstOrNull { (_, cells) -> cell in cells }?.key
+                                val colorToActivate = node?.color ?: ownerColor
+                                if (colorToActivate != null) onNodeTouched(colorToActivate, cell)
+                            }
+                        }
                         dragPosition = down.position
                         lastRawPosition = down.position
 
@@ -335,12 +365,6 @@ private fun DrawScope.drawPaths(
             val lastCenter = cellCenter(cells.last(), cellSize)
             val dx = dragPosition!!.x - lastCenter.x
             val dy = dragPosition.y - lastCenter.y
-            // Antes llegaba hasta cellSize completo (el centro de la celda vecina),
-            // lo que hacía parecer que la línea "entraba" a una celda que en
-            // realidad nunca se cruzó/validó. Con la mitad, la punta se queda
-            // dentro del área de la celda actual y solo avanza de verdad cuando
-            // el movimiento se confirma (ahí cells.last() cambia y el centro
-            // de referencia se mueve con él).
             val reach = cellSize * 0.5f
             val snappedEnd = if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
                 Offset(lastCenter.x + dx.coerceIn(-reach, reach), lastCenter.y)

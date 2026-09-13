@@ -1,11 +1,5 @@
 package com.zenflow.app.game
 
-/**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/HapticController.kt (REEMPLAZA el archivo)
- * Cambio: agrega onCellAdded() -> tick corto y seco por cada celda que se
- * suma a la línea mientras se arrastra, con amplitud ascendente (tono que
- * "crece" con la longitud del camino), tope en 200 para no saturar.
- */
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
@@ -13,6 +7,8 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 class HapticController(context: Context) {
+
+    var enabled: Boolean = true
 
     private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -40,6 +36,7 @@ class HapticController(context: Context) {
 
     /** Patrón más largo/fuerte al completar el nivel entero. */
     fun onLevelComplete() {
+        if (!enabled) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val timings = longArrayOf(0, 30, 40, 30, 40, 60)
             val amplitudes = intArrayOf(0, 100, 0, 140, 0, 220)
@@ -51,6 +48,7 @@ class HapticController(context: Context) {
     fun onInvalidMove() = vibrateOneShot(durationMs = 8, amplitude = 40)
 
     private fun vibrateOneShot(durationMs: Long, amplitude: Int) {
+        if (!enabled) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
         } else {

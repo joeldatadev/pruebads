@@ -1,7 +1,7 @@
 package com.zenflow.app.levelselect
 
 /**
- * Ruta destino: app/src/main/java/com/zenflow/app/levelselect/LevelSelectScreen.kt (REEMPLAZA el archivo)
+ * Ruta destino: app/src/main/java/com/zenflow/app/levelselect/LevelSelectScreen.kt
  *
  * Decisiones de diseño (no arbitrarias):
  * - El Reto Diario es el héroe (gradiente ámbar/rojo = fuego = la racha, no un
@@ -9,12 +9,11 @@ package com.zenflow.app.levelselect
  * - Modo Infinito usa un gradiente teal/azul (evoca flujo continuo/agua) para
  *   diferenciarse visualmente del calor del reto diario.
  * - Las celdas de nivel usan los MISMOS colores del puzzle (PuzzleColorMapper)
- *   como acento, cicladados por número - conecta visualmente la selección de
+ *   como acento, ciclado por número - conecta visualmente la selección de
  *   niveles con el propio juego, en vez de una grilla gris sin relación.
  * - Grid adaptativo (GridCells.Adaptive) en vez de columnas fijas, para que
  *   se vea bien en cualquier ancho de pantalla.
  */
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -38,8 +38,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -77,6 +79,7 @@ fun LevelSelectScreen(
     onLevelSelected: (Int) -> Unit,
     onInfiniteModeSelected: () -> Unit = {},
     onDailyChallengeSelected: () -> Unit = {},
+    onSettingsSelected: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: LevelSelectViewModel = viewModel(
@@ -92,12 +95,25 @@ fun LevelSelectScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Zen Flow",
-            color = Color.White,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Zen Flow",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            IconButton(onClick = onSettingsSelected) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Ajustes",
+                    tint = Color(0xFFB8BCC8)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 

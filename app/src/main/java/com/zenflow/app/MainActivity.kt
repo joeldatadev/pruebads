@@ -25,12 +25,15 @@ import com.zenflow.app.ads.BannerAdView
 import com.zenflow.app.ads.InterstitialAdManager
 import com.zenflow.app.game.GameScreen
 import com.zenflow.app.levelselect.LevelSelectScreen
+import com.zenflow.app.settings.SettingsScreen
 import com.zenflow.data.daily.DailyChallengeDataStore
 import com.zenflow.data.daily.DailyChallengeRepositoryImpl
 import com.zenflow.data.level.LevelDataSource
 import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.data.progress.ProgressDataStore
 import com.zenflow.data.progress.ProgressRepositoryImpl
+import com.zenflow.data.settings.SettingsDataStore
+import com.zenflow.data.settings.SettingsRepositoryImpl
 import com.zenflow.domain.ads.AdFrequencyController
 import java.time.LocalDate
 
@@ -39,6 +42,7 @@ private sealed class Screen {
     data class Campaign(val levelId: Int) : Screen()
     data class Infinite(val index: Int, val seed: Long) : Screen()
     object Daily : Screen()
+    object Settings : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -52,6 +56,7 @@ class MainActivity : ComponentActivity() {
         val levelRepository = LevelRepositoryImpl(LevelDataSource(applicationContext))
         val progressRepository = ProgressRepositoryImpl(ProgressDataStore(applicationContext))
         val dailyChallengeRepository = DailyChallengeRepositoryImpl(DailyChallengeDataStore(applicationContext))
+        val settingsRepository = SettingsRepositoryImpl(SettingsDataStore(applicationContext))
         val interstitialAdManager = InterstitialAdManager(applicationContext)
         val adFrequencyController = AdFrequencyController()
 
@@ -123,6 +128,13 @@ class MainActivity : ComponentActivity() {
                                         onLevelRestarted = { onRestarted() }
                                     )
                                 }
+                                Screen.Settings -> {
+                                    BackHandler { screen = Screen.LevelSelect }
+                                    SettingsScreen(
+                                        settingsRepository = settingsRepository,
+                                        onBack = { screen = Screen.LevelSelect }
+                                    )
+                                }
                                 Screen.LevelSelect -> LevelSelectScreen(
                                     levelRepository = levelRepository,
                                     progressRepository = progressRepository,
@@ -131,7 +143,8 @@ class MainActivity : ComponentActivity() {
                                     onInfiniteModeSelected = {
                                         screen = Screen.Infinite(index = 1, seed = System.currentTimeMillis())
                                     },
-                                    onDailyChallengeSelected = { screen = Screen.Daily }
+                                    onDailyChallengeSelected = { screen = Screen.Daily },
+                                    onSettingsSelected = { screen = Screen.Settings }
                                 )
                             }
                         }
