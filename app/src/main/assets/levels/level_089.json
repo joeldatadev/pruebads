@@ -1,0 +1,97 @@
+{
+  "id": 89,
+  "rows": 8,
+  "cols": 8,
+  "nodes": [
+    {
+      "row": 4,
+      "col": 1,
+      "color": "RED"
+    },
+    {
+      "row": 5,
+      "col": 2,
+      "color": "RED"
+    },
+    {
+      "row": 6,
+      "col": 0,
+      "color": "BLUE"
+    },
+    {
+      "row": 6,
+      "col": 4,
+      "color": "BLUE"
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "color": "GREEN"
+    },
+    {
+      "row": 0,
+      "col": 2,
+      "color": "GREEN"
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "color": "YELLOW"
+    },
+    {
+      "row": 3,
+      "col": 5,
+      "color": "YELLOW"
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "color": "ORANGE"
+    },
+    {
+      "row": 3,
+      "col": 1,
+      "color": "ORANGE"
+    },
+    {
+      "row": 2,
+      "col": 5,
+      "color": "PURPLE"
+    },
+    {
+      "row": 2,
+      "col": 3,
+      "color": "PURPLE"
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "color": "CYAN"
+    },
+    {
+      "row": 5,
+      "col": 0,
+      "color": "CYAN"
+    },
+    {
+      "row": 6,
+      "col": 5,
+      "color": "PINK"
+    },
+    {
+      "row": 1,
+      "col": 6,
+      "color": "PINK"
+    },
+    {
+      "row": 7,
+      "col": 5,
+      "color": "BROWN"
+    },
+    {
+      "row": 2,
+      "col": 7,
+      "color": "BROWN"
+    }
+  ]
+}

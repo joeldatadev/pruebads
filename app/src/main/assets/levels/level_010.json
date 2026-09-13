@@ -1,11 +1,11 @@
 {
-  "id": 1,
+  "id": 10,
   "rows": 5,
   "cols": 5,
   "nodes": [
     {
-      "row": 0,
-      "col": 0,
+      "row": 1,
+      "col": 2,
       "color": "RED"
     },
     {
@@ -14,23 +14,23 @@
       "color": "RED"
     },
     {
+      "row": 2,
+      "col": 0,
+      "color": "BLUE"
+    },
+    {
       "row": 1,
-      "col": 4,
+      "col": 3,
       "color": "BLUE"
     },
     {
-      "row": 0,
-      "col": 2,
-      "color": "BLUE"
-    },
-    {
-      "row": 3,
-      "col": 4,
+      "row": 4,
+      "col": 3,
       "color": "GREEN"
     },
     {
-      "row": 2,
-      "col": 4,
+      "row": 4,
+      "col": 0,
       "color": "GREEN"
     }
   ]

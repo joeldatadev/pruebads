@@ -1,0 +1,107 @@
+{
+  "id": 100,
+  "rows": 8,
+  "cols": 8,
+  "nodes": [
+    {
+      "row": 2,
+      "col": 3,
+      "color": "RED"
+    },
+    {
+      "row": 0,
+      "col": 2,
+      "color": "RED"
+    },
+    {
+      "row": 7,
+      "col": 7,
+      "color": "BLUE"
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "color": "BLUE"
+    },
+    {
+      "row": 5,
+      "col": 4,
+      "color": "GREEN"
+    },
+    {
+      "row": 6,
+      "col": 0,
+      "color": "GREEN"
+    },
+    {
+      "row": 7,
+      "col": 0,
+      "color": "YELLOW"
+    },
+    {
+      "row": 7,
+      "col": 6,
+      "color": "YELLOW"
+    },
+    {
+      "row": 0,
+      "col": 7,
+      "color": "ORANGE"
+    },
+    {
+      "row": 5,
+      "col": 6,
+      "color": "ORANGE"
+    },
+    {
+      "row": 5,
+      "col": 2,
+      "color": "PURPLE"
+    },
+    {
+      "row": 3,
+      "col": 3,
+      "color": "PURPLE"
+    },
+    {
+      "row": 5,
+      "col": 0,
+      "color": "CYAN"
+    },
+    {
+      "row": 0,
+      "col": 0,
+      "color": "CYAN"
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "color": "PINK"
+    },
+    {
+      "row": 5,
+      "col": 1,
+      "color": "PINK"
+    },
+    {
+      "row": 0,
+      "col": 5,
+      "color": "BROWN"
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "color": "BROWN"
+    },
+    {
+      "row": 6,
+      "col": 6,
+      "color": "GRAY"
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "color": "GRAY"
+    }
+  ]
+}

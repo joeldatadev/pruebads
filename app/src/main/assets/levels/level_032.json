@@ -1,0 +1,57 @@
+{
+  "id": 32,
+  "rows": 6,
+  "cols": 6,
+  "nodes": [
+    {
+      "row": 3,
+      "col": 5,
+      "color": "RED"
+    },
+    {
+      "row": 2,
+      "col": 4,
+      "color": "RED"
+    },
+    {
+      "row": 2,
+      "col": 3,
+      "color": "BLUE"
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "color": "BLUE"
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "color": "GREEN"
+    },
+    {
+      "row": 3,
+      "col": 4,
+      "color": "GREEN"
+    },
+    {
+      "row": 4,
+      "col": 1,
+      "color": "YELLOW"
+    },
+    {
+      "row": 2,
+      "col": 1,
+      "color": "YELLOW"
+    },
+    {
+      "row": 2,
+      "col": 0,
+      "color": "ORANGE"
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "color": "ORANGE"
+    }
+  ]
+}

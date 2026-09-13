@@ -1,36 +1,36 @@
 {
-  "id": 1,
+  "id": 4,
   "rows": 5,
   "cols": 5,
   "nodes": [
     {
-      "row": 0,
-      "col": 0,
+      "row": 3,
+      "col": 4,
       "color": "RED"
     },
     {
-      "row": 4,
-      "col": 4,
+      "row": 3,
+      "col": 1,
       "color": "RED"
     },
     {
       "row": 1,
+      "col": 0,
+      "color": "BLUE"
+    },
+    {
+      "row": 4,
       "col": 4,
       "color": "BLUE"
     },
     {
       "row": 0,
-      "col": 2,
-      "color": "BLUE"
-    },
-    {
-      "row": 3,
-      "col": 4,
+      "col": 0,
       "color": "GREEN"
     },
     {
-      "row": 2,
-      "col": 4,
+      "row": 1,
+      "col": 1,
       "color": "GREEN"
     }
   ]

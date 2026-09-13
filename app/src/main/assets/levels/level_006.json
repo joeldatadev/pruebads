@@ -1,15 +1,15 @@
 {
-  "id": 1,
+  "id": 6,
   "rows": 5,
   "cols": 5,
   "nodes": [
     {
-      "row": 0,
+      "row": 3,
       "col": 0,
       "color": "RED"
     },
     {
-      "row": 4,
+      "row": 0,
       "col": 4,
       "color": "RED"
     },
@@ -19,18 +19,18 @@
       "color": "BLUE"
     },
     {
-      "row": 0,
-      "col": 2,
+      "row": 1,
+      "col": 1,
       "color": "BLUE"
     },
     {
-      "row": 3,
-      "col": 4,
+      "row": 4,
+      "col": 0,
       "color": "GREEN"
     },
     {
-      "row": 2,
-      "col": 4,
+      "row": 3,
+      "col": 1,
       "color": "GREEN"
     }
   ]

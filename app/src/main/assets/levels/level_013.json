@@ -1,26 +1,26 @@
 {
-  "id": 1,
+  "id": 13,
   "rows": 5,
   "cols": 5,
   "nodes": [
     {
+      "row": 1,
+      "col": 1,
+      "color": "RED"
+    },
+    {
       "row": 0,
-      "col": 0,
+      "col": 4,
       "color": "RED"
     },
     {
       "row": 4,
-      "col": 4,
-      "color": "RED"
-    },
-    {
-      "row": 1,
-      "col": 4,
+      "col": 1,
       "color": "BLUE"
     },
     {
-      "row": 0,
-      "col": 2,
+      "row": 3,
+      "col": 1,
       "color": "BLUE"
     },
     {
@@ -29,9 +29,19 @@
       "color": "GREEN"
     },
     {
+      "row": 4,
+      "col": 2,
+      "color": "GREEN"
+    },
+    {
+      "row": 1,
+      "col": 4,
+      "color": "YELLOW"
+    },
+    {
       "row": 2,
       "col": 4,
-      "color": "GREEN"
+      "color": "YELLOW"
     }
   ]
 }

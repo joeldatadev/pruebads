@@ -1,11 +1,11 @@
 {
-  "id": 1,
+  "id": 5,
   "rows": 5,
   "cols": 5,
   "nodes": [
     {
-      "row": 0,
-      "col": 0,
+      "row": 2,
+      "col": 1,
       "color": "RED"
     },
     {
@@ -14,23 +14,23 @@
       "color": "RED"
     },
     {
-      "row": 1,
+      "row": 3,
+      "col": 4,
+      "color": "BLUE"
+    },
+    {
+      "row": 0,
       "col": 4,
       "color": "BLUE"
     },
     {
       "row": 0,
       "col": 2,
-      "color": "BLUE"
-    },
-    {
-      "row": 3,
-      "col": 4,
       "color": "GREEN"
     },
     {
-      "row": 2,
-      "col": 4,
+      "row": 3,
+      "col": 1,
       "color": "GREEN"
     }
   ]
