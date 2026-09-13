@@ -1,9 +1,21 @@
 package com.zenflow.app.game
 
 /**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/GameScreen.kt
- * Fase "Celebración": Ripple Effect expandiéndose desde el centro del tablero
- * al completar el nivel (GameEvent.LevelCompleted) + LevelCompleteOverlay encima.
+ * Ruta destino: app/src/main/java/com/zenflow/app/game/GameScreen.kt (REEMPLAZA el archivo completo)
+ *
+ * Fixes de esta versión:
+ * 1. "Manchado" de la línea al arrastrar: drawPaths ahora dibuja UN SOLO
+ *    Path continuo por color (una sola llamada drawPath) en vez de N
+ *    drawLine() por segmento -> elimina el doble-blending de alpha en
+ *    cada unión.
+ * 2. "Diagonal fantasma" / línea que se sale de la cuadrícula: el tramo
+ *    vivo del drag ya no apunta a la posición cruda del dedo. Se snapea
+ *    a la dirección dominante (horizontal/vertical) desde el centro de
+ *    la última celda, limitado a 1 celda de longitud.
+ * 3. Celdas saltadas en swipes rápidos: processInterpolatedDrag() recorre
+ *    el segmento entre eventos de drag en pasos pequeños y llama onDrag()
+ *    por cada celda distinta cruzada, EN ORDEN -> ya no se pierden pasos.
+ * 4. Haptic tick ascendente por celda agregada (HapticController.onCellAdded).
  */
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -12,9 +24,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -53,23 +65,22 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-// ✅ SE UTILIZA LA INTERFAZ DE DOMAIN (Inversión de Dependencias)
-import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
-import com.zenflow.domain.repository.ProgressRepository
 import com.zenflow.domain.repository.DailyChallengeRepository
+import com.zenflow.domain.repository.ProgressRepository
 import kotlinx.coroutines.launch
 
 @Composable
 fun GameScreen(
     levelId: Int,
-    levelRepository: LevelRepository,
+    levelRepository: LevelRepositoryImpl,
     progressRepository: ProgressRepository,
     dailyChallengeRepository: DailyChallengeRepository,
     infiniteSeed: Long? = null,
-    isDailyChallenge: Boolean = false,
+    dailyEpochDay: Long? = null,
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
     onLevelRestarted: () -> Unit = {},
@@ -82,9 +93,9 @@ fun GameScreen(
     val context = LocalContext.current
     val hapticController = remember { HapticController(context) }
 
-    remember(levelId, infiniteSeed, isDailyChallenge) {
+    remember(levelId, infiniteSeed, dailyEpochDay) {
         when {
-            isDailyChallenge -> viewModel.loadDailyChallenge()
+            dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed)
             else -> viewModel.loadLevel(levelId)
         }
@@ -134,7 +145,10 @@ fun GameScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         TextButton(onClick = onBackToLevelSelect) {
-                            Text("← Niveles")
+                            Text(if (dailyEpochDay != null) "← Salir" else "← Niveles")
+                        }
+                        if (dailyEpochDay != null) {
+                            Text("🔥 Reto Diario", color = Color(0xFFFFD700))
                         }
                         IconButton(onClick = {
                             hapticController.onInvalidMove() // pulso corto de confirmación
@@ -158,7 +172,17 @@ fun GameScreen(
                                 scope.launch { animatePulse(nodeScales, cell) }
                                 viewModel.onNodeTouched(color, cell)
                             },
-                            onDrag = viewModel::onDrag,
+                            onDrag = { cell ->
+                                // Lee el largo ANTES/DESPUÉS via StateFlow.value (síncrono,
+                                // no depende de recomposición) para saber si la celda se
+                                // sumó de verdad -> dispara el tick háptico ascendente
+                                // solo cuando el camino realmente creció.
+                                val color = viewModel.uiState.value.activeColor
+                                val beforeLen = color?.let { viewModel.uiState.value.board?.paths?.get(it)?.size } ?: 0
+                                viewModel.onDrag(cell)
+                                val afterLen = color?.let { viewModel.uiState.value.board?.paths?.get(it)?.size } ?: 0
+                                if (afterLen > beforeLen) hapticController.onCellAdded(afterLen)
+                            },
                             onDragEnd = viewModel::onDragEnd
                         )
 
@@ -206,7 +230,14 @@ private fun BoardLayers(
     onDragEnd: () -> Unit
 ) {
     var cellSizePx by remember { mutableFloatStateOf(0f) }
+    // dragPosition = posición cruda del dedo, CLAMPEADA al tablero. Se usa
+    // solo para calcular el tail "snapeado" en drawPaths, nunca se dibuja
+    // directamente -> así nunca puede salirse de la cuadrícula ni cortar
+    // en diagonal, sin perder la sensación de seguir al dedo en tiempo real.
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
+    // Última posición cruda procesada, para interpolar el tramo recorrido
+    // desde el evento de drag anterior y no saltarnos celdas en swipes rápidos.
+    var lastRawPosition by remember { mutableStateOf<Offset?>(null) }
 
     fun offsetToCell(offset: Offset): Cell? {
         if (cellSizePx <= 0f) return null
@@ -222,43 +253,85 @@ private fun BoardLayers(
         return Offset(offset.x.coerceIn(0f, maxX), offset.y.coerceIn(0f, maxY))
     }
 
+    /**
+     * Recorre el segmento entre dos posiciones crudas en pasos de ~cellSize/3 px
+     * y llama onDrag(cell) por cada celda distinta que se cruza, EN ORDEN.
+     * Esto es lo que evita que un swipe rápido "salte" celdas: sin esto,
+     * ValidateMoveUseCase rechazaría el salto por no ser adyacente y la
+     * línea se trababa o se veía entrecortada.
+     */
+    fun processInterpolatedDrag(from: Offset, to: Offset) {
+        if (cellSizePx <= 0f) return
+        val distance = (to - from).getDistance()
+        val stepPx = (cellSizePx / 3f).coerceAtLeast(4f)
+        val steps = (distance / stepPx).toInt().coerceAtLeast(1)
+        var lastCell: Cell? = null
+        for (i in 1..steps) {
+            val t = i / steps.toFloat()
+            val point = Offset(
+                x = from.x + (to.x - from.x) * t,
+                y = from.y + (to.y - from.y) * t
+            )
+            val cell = offsetToCell(point) ?: continue
+            if (cell != lastCell) {
+                onDrag(cell)
+                lastCell = cell
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .padding(16.dp)
             .aspectRatio(board.cols.toFloat() / board.rows.toFloat())
             .fillMaxSize()
     ) {
+        Canvas(modifier = Modifier.fillMaxSize().blur(18.dp)) {
+            cellSizePx = size.width / board.cols
+            drawPaths(board, cellSizePx, glow = true, activeColor, dragPosition)
+        }
+
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(board) {
-                    // Un solo gesto (toque + arrastre) en vez de dos pointerInput
-                    // separados compitiendo por los mismos eventos. drag() no
-                    // aplica "touch slop" (el umbral mínimo que detectDragGestures
-                    // exige antes de reconocer el arrastre), así que la línea
-                    // arranca a seguir el dedo desde el primer píxel de contacto.
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val startCell = offsetToCell(down.position)
-                        val node = startCell?.let { cell -> board.nodes.firstOrNull { it.cell == cell } }
-                        if (node != null) onNodeTouched(node.color, startCell)
-                        dragPosition = down.position
-
-                        drag(down.id) { change ->
-                            change.consume()
-                            dragPosition = clampToBoard(change.position)
-                            offsetToCell(change.position)?.let(onDrag)
+                    detectTapGestures(
+                        onPress = { offset ->
+                            val cell = offsetToCell(offset) ?: return@detectTapGestures
+                            val node = board.nodes.firstOrNull { it.cell == cell }
+                            if (node != null) onNodeTouched(node.color, cell)
+                            dragPosition = offset
+                            lastRawPosition = offset
                         }
-
-                        dragPosition = null
-                        onDragEnd()
-                    }
+                    )
+                }
+                .pointerInput(board) {
+                    detectDragGestures(
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val clamped = clampToBoard(change.position)
+                            val previous = lastRawPosition ?: clamped
+                            processInterpolatedDrag(previous, clamped)
+                            dragPosition = clamped
+                            lastRawPosition = clamped
+                        },
+                        onDragEnd = {
+                            dragPosition = null
+                            lastRawPosition = null
+                            onDragEnd()
+                        },
+                        onDragCancel = {
+                            dragPosition = null
+                            lastRawPosition = null
+                            onDragEnd()
+                        }
+                    )
                 }
         ) {
             cellSizePx = size.width / board.cols
 
             drawGrid(board, cellSizePx)
-            drawPaths(board, cellSizePx, activeColor, dragPosition)
+            drawPaths(board, cellSizePx, glow = false, activeColor, dragPosition)
             drawNodes(board, connectedColors, nodeScales, cellSizePx)
             drawParticles(particles, cellSizePx)
             if (rippleProgress in 0f..1f && rippleProgress > 0f) {
@@ -278,88 +351,59 @@ private fun DrawScope.drawGrid(board: Board, cellSize: Float) {
     }
 }
 
+/**
+ * Dibuja el camino de cada color como UN SOLO Path continuo (incluyendo el
+ * tramo "vivo" del drag activo) con UNA sola llamada drawPath().
+ *
+ * Dos bugs resueltos aquí a la vez:
+ * 1. "Manchado": dibujar segmento por segmento con drawLine() hacía que el
+ *    alpha se mezclara doble en cada unión (glow semitransparente). Un Path
+ *    único se compone una sola vez sin importar cuántas uniones tenga.
+ * 2. "Diagonal fantasma": el tramo vivo ya NO apunta a la posición cruda del
+ *    dedo. Se calcula la dirección dominante (horizontal/vertical) desde el
+ *    centro de la última celda confirmada y se limita a 1 celda de longitud
+ *    en esa dirección -> sigue al dedo con fluidez pero nunca puede
+ *    dibujar una diagonal fuera de la cuadrícula.
+ */
 private fun DrawScope.drawPaths(
     board: Board,
     cellSize: Float,
+    glow: Boolean,
     activeColor: PuzzleColor?,
     dragPosition: Offset?
 ) {
     board.paths.forEach { (color, cells) ->
-        if (cells.isEmpty()) return@forEach
-        val liveEnd = if (color == activeColor) {
-            clampLiveEnd(lastPoint = cellCenter(cells.last(), cellSize), rawEnd = dragPosition, maxDistance = cellSize * 1.15f)
-        } else {
-            null
+        val isActiveDrag = color == activeColor && dragPosition != null && cells.isNotEmpty()
+        if (cells.size < 2 && !isActiveDrag) return@forEach
+
+        val path = Path()
+        cells.forEachIndexed { i, cell ->
+            val center = cellCenter(cell, cellSize)
+            if (i == 0) path.moveTo(center.x, center.y) else path.lineTo(center.x, center.y)
         }
-        drawGlowingPath(cells, liveEnd, color.toComposeColor(), cellSize)
+
+        if (isActiveDrag) {
+            val lastCenter = cellCenter(cells.last(), cellSize)
+            val dx = dragPosition!!.x - lastCenter.x
+            val dy = dragPosition.y - lastCenter.y
+            val snappedEnd = if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
+                Offset(lastCenter.x + dx.coerceIn(-cellSize, cellSize), lastCenter.y)
+            } else {
+                Offset(lastCenter.x, lastCenter.y + dy.coerceIn(-cellSize, cellSize))
+            }
+            path.lineTo(snappedEnd.x, snappedEnd.y)
+        }
+
+        val baseColor = color.toComposeColor()
+        val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
+        val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
+
+        drawPath(
+            path = path,
+            color = drawColor,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
     }
-}
-
-/**
- * Evita el efecto "diagonal fuera de la cuadrícula": si el último paso del
- * dedo fue rechazado (celda no adyacente, ocupada, etc.), dragPosition sigue
- * actualizándose con la posición cruda del dedo, que puede estar varias
- * celdas de distancia. Sin este límite, el tramo visual se estira en línea
- * recta hasta ahí, cortando la cuadrícula. Con el límite, la punta nunca
- * dibuja más allá de ~1 celda desde la última celda confirmada.
- */
-private fun clampLiveEnd(lastPoint: Offset, rawEnd: Offset?, maxDistance: Float): Offset? {
-    if (rawEnd == null) return null
-    val dx = rawEnd.x - lastPoint.x
-    val dy = rawEnd.y - lastPoint.y
-    val distance = kotlin.math.hypot(dx, dy)
-    if (distance <= maxDistance || distance == 0f) return rawEnd
-    val scale = maxDistance / distance
-    return Offset(lastPoint.x + dx * scale, lastPoint.y + dy * scale)
-}
-
-private fun DrawScope.drawGlowingPath(
-    cells: List<Cell>,
-    liveEnd: Offset?,
-    color: Color,
-    cellSize: Float
-) {
-    val path = buildSmoothPath(cells, cellSize, liveEnd)
-
-    drawPath(
-        path,
-        color = color.copy(alpha = 0.20f),
-        style = Stroke(width = cellSize * 0.85f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    )
-    drawPath(
-        path,
-        color = color.copy(alpha = 0.35f),
-        style = Stroke(width = cellSize * 0.55f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    )
-    drawPath(
-        path,
-        color = color,
-        style = Stroke(width = cellSize * 0.28f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    )
-}
-
-private fun buildSmoothPath(cells: List<Cell>, cellSize: Float, liveEnd: Offset?): Path {
-    val points = cells.map { cellCenter(it, cellSize) }
-    val path = Path()
-    if (points.isEmpty()) return path
-
-    path.moveTo(points.first().x, points.first().y)
-
-    if (points.size == 1) {
-        if (liveEnd != null) path.lineTo(liveEnd.x, liveEnd.y)
-        return path
-    }
-
-    for (i in 1 until points.size - 1) {
-        val vertex = points[i]
-        val next = points[i + 1]
-        val midToNext = Offset((vertex.x + next.x) / 2f, (vertex.y + next.y) / 2f)
-        path.quadraticBezierTo(vertex.x, vertex.y, midToNext.x, midToNext.y)
-    }
-    path.lineTo(points.last().x, points.last().y)
-
-    if (liveEnd != null) path.lineTo(liveEnd.x, liveEnd.y)
-    return path
 }
 
 private fun DrawScope.drawNodes(
@@ -395,10 +439,12 @@ private fun DrawScope.drawParticles(particles: List<ParticleBurst>, cellSize: Fl
     }
 }
 
+/** Onda expansiva desde el centro del tablero, recorre todas las casillas al completar el nivel. */
 private fun DrawScope.drawRipple(board: Board, cellSize: Float, progress: Float) {
     val boardCenter = Offset(board.cols * cellSize / 2f, board.rows * cellSize / 2f)
     val maxRadius = kotlin.math.hypot(board.cols * cellSize, board.rows * cellSize) / 2f
 
+    // Dos anillos desfasados para dar sensación de onda con cuerpo, no un solo círculo plano
     listOf(0f, 0.15f).forEach { delay ->
         val localProgress = ((progress - delay) / (1f - delay)).coerceIn(0f, 1f)
         if (localProgress <= 0f) return@forEach

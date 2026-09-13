@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 class GameViewModel(
     private val levelRepository: LevelRepository,
@@ -75,8 +76,13 @@ class GameViewModel(
     }
 
     /** Reto Diario: mismo tablero para todos los jugadores en la misma fecha (ver GetDailyChallengeSeedUseCase). */
-    fun loadDailyChallenge() {
-        val daily = getDailyChallengeSeed()
+    fun loadDailyChallenge(epochDay: Long? = null) {
+        val daily = if (epochDay != null) {
+            getDailyChallengeSeed(LocalDate.ofEpochDay(epochDay))
+        } else {
+            getDailyChallengeSeed()
+        }
+
         currentLevelId = null
         currentInfinite = null
         currentDailyEpochDay = daily.epochDay
@@ -89,10 +95,9 @@ class GameViewModel(
         }
     }
 
-    /** Recarga el mismo nivel/tablero, sea cual sea el modo activo (campaña, infinito o diario). */
     fun restartLevel() {
         currentInfinite?.let { (index, seed) -> loadInfiniteLevel(index, seed); return }
-        if (currentDailyEpochDay != null) { loadDailyChallenge(); return }
+        currentDailyEpochDay?.let { epochDay -> loadDailyChallenge(epochDay); return }
         currentLevelId?.let { loadLevel(it) }
     }
 

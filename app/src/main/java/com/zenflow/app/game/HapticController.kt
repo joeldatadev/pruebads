@@ -1,7 +1,10 @@
 package com.zenflow.app.game
 
 /**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/HapticController.kt
+ * Ruta destino: app/src/main/java/com/zenflow/app/game/HapticController.kt (REEMPLAZA el archivo)
+ * Cambio: agrega onCellAdded() -> tick corto y seco por cada celda que se
+ * suma a la línea mientras se arrastra, con amplitud ascendente (tono que
+ * "crece" con la longitud del camino), tope en 200 para no saturar.
  */
 import android.content.Context
 import android.os.Build
@@ -24,6 +27,16 @@ class HapticController(context: Context) {
 
     /** Vibración media cuando un color se conecta (sincronizada con Snap + partículas). */
     fun onColorConnected() = vibrateOneShot(durationMs = 25, amplitude = 140)
+
+    /**
+     * Tick corto y seco por cada celda agregada a la línea mientras se arrastra.
+     * La amplitud sube con la longitud del path (tono "ascendente") y se topa
+     * en 200 para no saturar en líneas largas.
+     */
+    fun onCellAdded(pathLength: Int) {
+        val amplitude = (40 + pathLength * 8).coerceAtMost(200)
+        vibrateOneShot(durationMs = 6, amplitude = amplitude)
+    }
 
     /** Patrón más largo/fuerte al completar el nivel entero. */
     fun onLevelComplete() {

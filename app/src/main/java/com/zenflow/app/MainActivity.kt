@@ -1,14 +1,5 @@
 package com.zenflow.app
 
-/**
- * Ruta destino: app/src/main/java/com/zenflow/app/MainActivity.kt (REEMPLAZA el archivo)
- * Cambio: .windowInsetsPadding(WindowInsets.safeDrawing) en el Surface raíz.
- * Con enableEdgeToEdge() el contenido dibuja debajo de la barra de estado,
- * la cámara/notch y la barra de gestos - sin este padding, cualquier pantalla
- * puede quedar tapada por esos elementos (justo lo que pasaba en tu captura).
- * Se aplica UNA vez aquí arriba, así cubre las 4 pantallas (LevelSelect,
- * Campaign, Infinite, Daily) sin repetirlo en cada una.
- */
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -41,6 +32,7 @@ import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.data.progress.ProgressDataStore
 import com.zenflow.data.progress.ProgressRepositoryImpl
 import com.zenflow.domain.ads.AdFrequencyController
+import java.time.LocalDate
 
 private sealed class Screen {
     object LevelSelect : Screen()
@@ -125,7 +117,7 @@ class MainActivity : ComponentActivity() {
                                         levelRepository = levelRepository,
                                         progressRepository = progressRepository,
                                         dailyChallengeRepository = dailyChallengeRepository,
-                                        isDailyChallenge = true,
+                                        dailyEpochDay = LocalDate.now().toEpochDay(),
                                         onNextLevel = { screen = Screen.LevelSelect },
                                         onBackToLevelSelect = { screen = Screen.LevelSelect },
                                         onLevelRestarted = { onRestarted() }
