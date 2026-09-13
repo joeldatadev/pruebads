@@ -4,7 +4,7 @@
   "cols": 5,
   "nodes": [
     { "row": 0, "col": 0, "color": "RED" },
-    { "row": 4, "col": 4, "color": "RED" },
+    { "row": 2, "col": 2, "color": "RED" },
     { "row": 0, "col": 4, "color": "BLUE" },
     { "row": 4, "col": 0, "color": "BLUE" }
   ]

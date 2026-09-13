@@ -9,7 +9,7 @@ package com.zenflow.app.game
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.data.level.LevelRepository
 
 class GameViewModelFactory(
     private val levelRepository: LevelRepository

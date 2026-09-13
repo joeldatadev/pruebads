@@ -48,7 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
-import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.data.level.LevelRepository
 import kotlinx.coroutines.launch
 
 @Composable

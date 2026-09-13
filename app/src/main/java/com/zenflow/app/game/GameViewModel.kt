@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
-import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.data.level.LevelRepository
 import com.zenflow.domain.usecase.CheckLevelCompleteUseCase
 import com.zenflow.domain.usecase.ValidateMoveUseCase
 import kotlinx.coroutines.flow.MutableSharedFlow

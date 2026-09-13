@@ -5,7 +5,7 @@ package com.zenflow.app.levelselect
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.data.level.LevelRepository
 
 class LevelSelectViewModelFactory(
     private val levelRepository: LevelRepository

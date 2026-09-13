@@ -5,7 +5,7 @@ package com.zenflow.app.levelselect
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.data.level.LevelRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
