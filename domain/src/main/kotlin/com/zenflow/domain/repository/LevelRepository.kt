@@ -1,4 +1,4 @@
-package com.zenflow.data.level
+package com.zenflow.domain.repository
 
 /**
  * Ruta destino: domain/src/main/kotlin/com/zenflow/domain/repository/LevelRepository.kt

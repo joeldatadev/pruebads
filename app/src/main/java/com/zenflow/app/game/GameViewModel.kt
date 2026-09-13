@@ -1,14 +1,20 @@
 package com.zenflow.app.game
 
 /**
- * Ruta destino: app/src/main/kotlin/com/zenflow/app/game/GameViewModel.kt
+ * Ruta destino: app/src/main/java/com/zenflow/app/game/GameViewModel.kt (REEMPLAZA el archivo)
+ * Cambio: agrega loadInfiniteLevel() usando GenerateProceduralLevelUseCase.
+ * En modo infinito NO se llama a progressRepository.markLevelCompleted()
+ * (no hay "nivel" persistente que marcar, el tablero es generado al vuelo).
+ * restartLevel() detecta automáticamente en qué modo estaba y recarga igual.
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
-import com.zenflow.data.level.LevelRepository
+import com.zenflow.domain.repository.LevelRepository
+import com.zenflow.domain.repository.ProgressRepository
 import com.zenflow.domain.usecase.CheckLevelCompleteUseCase
+import com.zenflow.domain.usecase.GenerateProceduralLevelUseCase
 import com.zenflow.domain.usecase.ValidateMoveUseCase
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,8 +26,10 @@ import kotlinx.coroutines.launch
 
 class GameViewModel(
     private val levelRepository: LevelRepository,
+    private val progressRepository: ProgressRepository,
     private val validateMove: ValidateMoveUseCase = ValidateMoveUseCase(),
-    private val checkLevelComplete: CheckLevelCompleteUseCase = CheckLevelCompleteUseCase()
+    private val checkLevelComplete: CheckLevelCompleteUseCase = CheckLevelCompleteUseCase(),
+    private val generateProceduralLevel: GenerateProceduralLevelUseCase = GenerateProceduralLevelUseCase()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GameUiState())
@@ -30,7 +38,14 @@ class GameViewModel(
     private val _events = MutableSharedFlow<GameEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<GameEvent> = _events.asSharedFlow()
 
+    private var currentLevelId: Int? = null           // solo modo campaña
+    private var currentInfinite: Pair<Int, Long>? = null // (index, seed) solo modo infinito
+    private var startTimeMs: Long = 0L
+
     fun loadLevel(levelId: Int) {
+        currentLevelId = levelId
+        currentInfinite = null
+        startTimeMs = System.currentTimeMillis()
         _uiState.value = GameUiState(isLoading = true)
         viewModelScope.launch {
             runCatching { levelRepository.getLevel(levelId) }
@@ -39,14 +54,30 @@ class GameViewModel(
         }
     }
 
-    /** Llamar cuando el usuario TOCA un nodo inicial (dispara el Pulse Effect en presentation). */
+    fun loadInfiniteLevel(index: Int, seed: Long) {
+        currentLevelId = null
+        currentInfinite = index to seed
+        startTimeMs = System.currentTimeMillis()
+        _uiState.value = GameUiState(isLoading = true)
+        viewModelScope.launch {
+            runCatching { generateProceduralLevel(seed = seed, index = index) }
+                .onSuccess { board -> _uiState.value = GameUiState(isLoading = false, board = board) }
+                .onFailure { e -> _uiState.value = GameUiState(isLoading = false, errorMessage = e.message) }
+        }
+    }
+
+    /** Recarga el mismo nivel/tablero, sea cual sea el modo activo (campaña o infinito). */
+    fun restartLevel() {
+        currentInfinite?.let { (index, seed) -> loadInfiniteLevel(index, seed); return }
+        currentLevelId?.let { loadLevel(it) }
+    }
+
     fun onNodeTouched(color: PuzzleColor, cell: Cell) {
         val board = _uiState.value.board ?: return
         val updatedBoard = board.withPath(color, listOf(cell))
         _uiState.value = _uiState.value.copy(board = updatedBoard, activeColor = color)
     }
 
-    /** Llamar en cada nueva celda que el dedo cruza mientras arrastra. */
     fun onDrag(targetCell: Cell) {
         val state = _uiState.value
         val board = state.board ?: return
@@ -59,7 +90,6 @@ class GameViewModel(
         }
     }
 
-    /** Llamar cuando el usuario levanta el dedo. */
     fun onDragEnd() {
         _uiState.value = _uiState.value.copy(activeColor = null)
     }
@@ -83,8 +113,12 @@ class GameViewModel(
         }
 
         if (checkLevelComplete.isLevelComplete(updatedBoard)) {
-            _uiState.value = _uiState.value.copy(isLevelComplete = true)
+            val elapsed = System.currentTimeMillis() - startTimeMs
+            _uiState.value = _uiState.value.copy(isLevelComplete = true, elapsedMs = elapsed)
             _events.tryEmit(GameEvent.LevelCompleted)
+            currentLevelId?.let { levelId ->
+                viewModelScope.launch { progressRepository.markLevelCompleted(levelId) }
+            }
         }
     }
 }

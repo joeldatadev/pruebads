@@ -2,13 +2,8 @@ package com.zenflow.app.game
 
 /**
  * Ruta destino: app/src/main/java/com/zenflow/app/game/GameScreen.kt (REEMPLAZA el archivo anterior)
- *
- * Fase 3 del roadmap. Arquitectura de render en 2 capas apiladas:
- *  - Canvas de GLOW (abajo): las mismas líneas pero más gruesas + Modifier.blur.
- *    Modifier.blur usa RenderEffect nativo en API 31+; en versiones anteriores
- *    Compose lo ignora silenciosamente (degradación agraciada, sin crash).
- *  - Canvas NÍTIDO (arriba): grid, líneas finas brillantes, nodos, partículas.
- *    También es el que captura los gestos.
+ * Fase "Celebración": Ripple Effect expandiéndose desde el centro del tablero
+ * al completar el nivel (GameEvent.LevelCompleted) + LevelCompleteOverlay encima.
  */
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -19,16 +14,26 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,31 +50,37 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
-import com.zenflow.data.level.LevelRepository
+import com.zenflow.domain.repository.ProgressRepository
 import kotlinx.coroutines.launch
 
 @Composable
 fun GameScreen(
     levelId: Int,
-    levelRepository: LevelRepository,
+    levelRepository: LevelRepositoryImpl,
+    progressRepository: ProgressRepository,
+    infiniteSeed: Long? = null,
+    onNextLevel: () -> Unit = {},
+    onBackToLevelSelect: () -> Unit = {},
+    onLevelRestarted: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val viewModel: GameViewModel = viewModel(factory = GameViewModelFactory(levelRepository))
+    val viewModel: GameViewModel = viewModel(factory = GameViewModelFactory(levelRepository, progressRepository))
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val hapticController = remember { HapticController(context) }
 
-    remember(levelId) {
-        viewModel.loadLevel(levelId)
+    remember(levelId, infiniteSeed) {
+        if (infiniteSeed != null) viewModel.loadInfiniteLevel(levelId, infiniteSeed) else viewModel.loadLevel(levelId)
         true
     }
 
-    // Escucha eventos de un solo disparo (snap, partículas, haptics) - NO viven en el StateFlow
     val particles = remember { mutableStateMapOf<String, ParticleBurst>() }
     val nodeScales = remember { mutableStateMapOf<Cell, Animatable<Float, AnimationVector1D>>() }
+    val rippleProgress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(viewModel) {
@@ -87,7 +98,13 @@ fun GameScreen(
                         particles.remove(burstId)
                     }
                 }
-                GameEvent.LevelCompleted -> hapticController.onLevelComplete()
+                GameEvent.LevelCompleted -> {
+                    hapticController.onLevelComplete()
+                    scope.launch {
+                        rippleProgress.snapTo(0f)
+                        rippleProgress.animateTo(1f, tween(900, easing = LinearEasing))
+                    }
+                }
                 GameEvent.InvalidMove -> hapticController.onInvalidMove()
             }
         }
@@ -97,31 +114,60 @@ fun GameScreen(
         when {
             uiState.isLoading -> CircularProgressIndicator()
             uiState.errorMessage != null -> Text("Error: ${uiState.errorMessage}")
-            uiState.board != null -> BoardLayers(
-                board = uiState.board!!,
-                connectedColors = uiState.connectedColors,
-                nodeScales = nodeScales,
-                particles = particles.values.toList(),
-                onNodeTouched = { color, cell ->
-                    hapticController.onNodeTouch()
-                    scope.launch { animatePulse(nodeScales, cell) }
-                    viewModel.onNodeTouched(color, cell)
-                },
-                onDrag = viewModel::onDrag,
-                onDragEnd = viewModel::onDragEnd
-            )
+            uiState.board != null -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = onBackToLevelSelect) {
+                            Text("← Niveles")
+                        }
+                        IconButton(onClick = {
+                            hapticController.onInvalidMove() // pulso corto de confirmación
+                            viewModel.restartLevel()
+                            onLevelRestarted()
+                        }) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Reiniciar nivel")
+                        }
+                    }
+
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        BoardLayers(
+                            board = uiState.board!!,
+                            connectedColors = uiState.connectedColors,
+                            activeColor = uiState.activeColor,
+                            nodeScales = nodeScales,
+                            particles = particles.values.toList(),
+                            rippleProgress = rippleProgress.value,
+                            onNodeTouched = { color, cell ->
+                                hapticController.onNodeTouch()
+                                scope.launch { animatePulse(nodeScales, cell) }
+                                viewModel.onNodeTouched(color, cell)
+                            },
+                            onDrag = viewModel::onDrag,
+                            onDragEnd = viewModel::onDragEnd
+                        )
+
+                        LevelCompleteOverlay(
+                            visible = uiState.isLevelComplete,
+                            elapsedMs = uiState.elapsedMs,
+                            onNextLevel = onNextLevel,
+                            onBackToLevelSelect = onBackToLevelSelect
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
-/** Bump de escala 1.0 -> 1.3 -> 1.0 al tocar un nodo inicial. */
 private suspend fun animatePulse(scales: MutableMap<Cell, Animatable<Float, AnimationVector1D>>, cell: Cell) {
     val anim = scales.getOrPut(cell) { Animatable(1f) }
     anim.animateTo(1.3f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
     anim.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
 }
 
-/** Mismo bump pero disparado cuando la línea ALCANZA el nodo destino (Snap Effect). */
 private suspend fun animateSnap(scales: MutableMap<Cell, Animatable<Float, AnimationVector1D>>, cell: Cell) {
     val anim = scales.getOrPut(cell) { Animatable(1f) }
     anim.animateTo(1.35f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
@@ -140,11 +186,16 @@ private fun BoardLayers(
     connectedColors: Set<PuzzleColor>,
     nodeScales: Map<Cell, Animatable<Float, AnimationVector1D>>,
     particles: List<ParticleBurst>,
+    rippleProgress: Float,
+    activeColor: PuzzleColor?,
     onNodeTouched: (PuzzleColor, Cell) -> Unit,
     onDrag: (Cell) -> Unit,
     onDragEnd: () -> Unit
 ) {
-    var cellSizePx by remember { mutableStateOf(0f) }
+    var cellSizePx by remember { mutableFloatStateOf(0f) }
+    // Posición cruda del dedo (sin "snapear" a celda) - esto es lo que hace que
+    // la línea se sienta fluida en vez de saltar cuadro a cuadro.
+    var dragPosition by remember { mutableStateOf<Offset?>(null) }
 
     fun offsetToCell(offset: Offset): Cell? {
         if (cellSizePx <= 0f) return null
@@ -154,19 +205,23 @@ private fun BoardLayers(
         return Cell(row, col)
     }
 
+    fun clampToBoard(offset: Offset): Offset {
+        val maxX = board.cols * cellSizePx
+        val maxY = board.rows * cellSizePx
+        return Offset(offset.x.coerceIn(0f, maxX), offset.y.coerceIn(0f, maxY))
+    }
+
     Box(
         modifier = Modifier
             .padding(16.dp)
             .aspectRatio(board.cols.toFloat() / board.rows.toFloat())
             .fillMaxSize()
     ) {
-        // Capa 1: GLOW (desenfocada, más ancha, más translúcida)
         Canvas(modifier = Modifier.fillMaxSize().blur(18.dp)) {
             cellSizePx = size.width / board.cols
-            drawPaths(board, cellSizePx, glow = true)
+            drawPaths(board, cellSizePx, glow = true, activeColor, dragPosition)
         }
 
-        // Capa 2: NÍTIDA (línea central + grid + nodos + partículas) + gestos
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -176,6 +231,7 @@ private fun BoardLayers(
                             val cell = offsetToCell(offset) ?: return@detectTapGestures
                             val node = board.nodes.firstOrNull { it.cell == cell }
                             if (node != null) onNodeTouched(node.color, cell)
+                            dragPosition = offset
                         }
                     )
                 }
@@ -183,19 +239,29 @@ private fun BoardLayers(
                     detectDragGestures(
                         onDrag = { change, _ ->
                             change.consume()
+                            dragPosition = clampToBoard(change.position)
                             offsetToCell(change.position)?.let(onDrag)
                         },
-                        onDragEnd = { onDragEnd() },
-                        onDragCancel = { onDragEnd() }
+                        onDragEnd = {
+                            dragPosition = null
+                            onDragEnd()
+                        },
+                        onDragCancel = {
+                            dragPosition = null
+                            onDragEnd()
+                        }
                     )
                 }
         ) {
             cellSizePx = size.width / board.cols
 
             drawGrid(board, cellSizePx)
-            drawPaths(board, cellSizePx, glow = false)
+            drawPaths(board, cellSizePx, glow = false, activeColor, dragPosition)
             drawNodes(board, connectedColors, nodeScales, cellSizePx)
             drawParticles(particles, cellSizePx)
+            if (rippleProgress in 0f..1f && rippleProgress > 0f) {
+                drawRipple(board, cellSizePx, rippleProgress)
+            }
         }
     }
 }
@@ -210,11 +276,13 @@ private fun DrawScope.drawGrid(board: Board, cellSize: Float) {
     }
 }
 
-/**
- * glow = true  -> capa ancha y translúcida (se dibuja en el Canvas con blur)
- * glow = false -> capa central nítida y brillante
- */
-private fun DrawScope.drawPaths(board: Board, cellSize: Float, glow: Boolean) {
+private fun DrawScope.drawPaths(
+    board: Board,
+    cellSize: Float,
+    glow: Boolean,
+    activeColor: PuzzleColor?,
+    dragPosition: Offset?
+) {
     board.paths.forEach { (color, cells) ->
         if (cells.size < 2) return@forEach
         val baseColor = color.toComposeColor()
@@ -226,6 +294,25 @@ private fun DrawScope.drawPaths(board: Board, cellSize: Float, glow: Boolean) {
                 color = drawColor,
                 start = cellCenter(cells[i], cellSize),
                 end = cellCenter(cells[i + 1], cellSize),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+
+    // Tramo "vivo": conecta la última celda confirmada con la posición REAL del
+    // dedo (sin snapear). Esto es lo que hace que el arrastre se sienta fluido
+    // en vez de saltar cuadro a cuadro.
+    if (activeColor != null && dragPosition != null) {
+        val cells = board.paths[activeColor]
+        if (!cells.isNullOrEmpty()) {
+            val baseColor = activeColor.toComposeColor()
+            val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
+            val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
+            drawLine(
+                color = drawColor,
+                start = cellCenter(cells.last(), cellSize),
+                end = dragPosition,
                 strokeWidth = strokeWidth,
                 cap = StrokeCap.Round
             )
@@ -247,7 +334,6 @@ private fun DrawScope.drawNodes(
     }
 }
 
-/** Micro-partículas que explotan desde el nodo destino al conectar un color. */
 private fun DrawScope.drawParticles(particles: List<ParticleBurst>, cellSize: Float) {
     val particleCount = 8
     particles.forEach { burst ->
@@ -264,6 +350,26 @@ private fun DrawScope.drawParticles(particles: List<ParticleBurst>, cellSize: Fl
             val dy = (kotlin.math.sin(angle) * travelDistance).toFloat()
             drawCircle(color = color, radius = particleRadius, center = center + Offset(dx, dy))
         }
+    }
+}
+
+/** Onda expansiva desde el centro del tablero, recorre todas las casillas al completar el nivel. */
+private fun DrawScope.drawRipple(board: Board, cellSize: Float, progress: Float) {
+    val boardCenter = Offset(board.cols * cellSize / 2f, board.rows * cellSize / 2f)
+    val maxRadius = kotlin.math.hypot(board.cols * cellSize, board.rows * cellSize) / 2f
+
+    // Dos anillos desfasados para dar sensación de onda con cuerpo, no un solo círculo plano
+    listOf(0f, 0.15f).forEach { delay ->
+        val localProgress = ((progress - delay) / (1f - delay)).coerceIn(0f, 1f)
+        if (localProgress <= 0f) return@forEach
+        val radius = maxRadius * localProgress
+        val alpha = (1f - localProgress) * 0.5f
+        drawCircle(
+            color = Color(0xFFFFD54F).copy(alpha = alpha),
+            radius = radius,
+            center = boardCenter,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = cellSize * 0.15f)
+        )
     }
 }
 
