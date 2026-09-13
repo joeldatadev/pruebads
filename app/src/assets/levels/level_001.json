@@ -1,0 +1,11 @@
+{
+  "id": 1,
+  "rows": 5,
+  "cols": 5,
+  "nodes": [
+    { "row": 0, "col": 0, "color": "RED" },
+    { "row": 4, "col": 4, "color": "RED" },
+    { "row": 0, "col": 4, "color": "BLUE" },
+    { "row": 4, "col": 0, "color": "BLUE" }
+  ]
+}
