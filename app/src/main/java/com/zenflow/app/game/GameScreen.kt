@@ -1,7 +1,7 @@
 package com.zenflow.app.game
 
 /**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/GameScreen.kt (REEMPLAZA el archivo anterior)
+ * Ruta destino: app/src/main/java/com/zenflow/app/game/GameScreen.kt
  * Fase "Celebración": Ripple Effect expandiéndose desde el centro del tablero
  * al completar el nivel (GameEvent.LevelCompleted) + LevelCompleteOverlay encima.
  */
@@ -52,7 +52,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.zenflow.data.level.LevelRepositoryImpl
+// ✅ SE UTILIZA LA INTERFAZ DE DOMAIN (Inversión de Dependencias)
+import com.zenflow.domain.repository.LevelRepository
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
@@ -63,7 +64,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun GameScreen(
     levelId: Int,
-    levelRepository: LevelRepositoryImpl,
+    levelRepository: LevelRepository,
     progressRepository: ProgressRepository,
     dailyChallengeRepository: DailyChallengeRepository,
     infiniteSeed: Long? = null,
@@ -204,8 +205,6 @@ private fun BoardLayers(
     onDragEnd: () -> Unit
 ) {
     var cellSizePx by remember { mutableFloatStateOf(0f) }
-    // Posición cruda del dedo (sin "snapear" a celda) - esto es lo que hace que
-    // la línea se sienta fluida en vez de saltar cuadro a cuadro.
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
 
     fun offsetToCell(offset: Offset): Cell? {
@@ -228,10 +227,6 @@ private fun BoardLayers(
             .aspectRatio(board.cols.toFloat() / board.rows.toFloat())
             .fillMaxSize()
     ) {
-        // UN SOLO Canvas: el glow ya no es un blur() de sistema sobre una capa
-        // aparte (caro y propenso a desincronizarse un frame del trazo real).
-        // Es el MISMO Path dibujado dos veces más ancho y más transparente,
-        // en el mismo frame -> imposible que se desalinee, y muchísimo más barato.
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -294,21 +289,11 @@ private fun DrawScope.drawPaths(
 ) {
     board.paths.forEach { (color, cells) ->
         if (cells.isEmpty()) return@forEach
-        // Tramo "vivo": si este es el color que se está arrastrando ahora mismo,
-        // el Path se extiende hasta la posición REAL del dedo (sin snapear a
-        // celda) -- es lo que hace que el arrastre se sienta fluido.
         val liveEnd = if (color == activeColor) dragPosition else null
         drawGlowingPath(cells, liveEnd, color.toComposeColor(), cellSize)
     }
 }
 
-/**
- * Dibuja UN solo Path continuo (con esquinas suavizadas vía quadraticTo) tres
- * veces sobre el mismo Canvas y el mismo frame: dos capas anchas/transparentes
- * para el resplandor de neón + una capa central angosta y brillante. Al ser
- * el mismo Path en las tres pasadas, glow y trazo NUNCA pueden desalinearse
- * (a diferencia de un Canvas de blur() aparte), y no hay costo de RenderEffect.
- */
 private fun DrawScope.drawGlowingPath(
     cells: List<Cell>,
     liveEnd: Offset?,
@@ -334,13 +319,6 @@ private fun DrawScope.drawGlowingPath(
     )
 }
 
-/**
- * Construye un Path que pasa EXACTO por el primer y último punto (los nodos,
- * para que la línea siempre calce con el círculo del nodo), pero redondea
- * las esquinas interiores con quadraticTo en vez de lineTo -- así un giro de
- * 90° se ve como una curva suave y no como dos tapas redondeadas chocando
- * (que es lo que se veía como "mancha" en las esquinas).
- */
 private fun buildSmoothPath(cells: List<Cell>, cellSize: Float, liveEnd: Offset?): Path {
     val points = cells.map { cellCenter(it, cellSize) }
     val path = Path()
@@ -398,12 +376,10 @@ private fun DrawScope.drawParticles(particles: List<ParticleBurst>, cellSize: Fl
     }
 }
 
-/** Onda expansiva desde el centro del tablero, recorre todas las casillas al completar el nivel. */
 private fun DrawScope.drawRipple(board: Board, cellSize: Float, progress: Float) {
     val boardCenter = Offset(board.cols * cellSize / 2f, board.rows * cellSize / 2f)
     val maxRadius = kotlin.math.hypot(board.cols * cellSize, board.rows * cellSize) / 2f
 
-    // Dos anillos desfasados para dar sensación de onda con cuerpo, no un solo círculo plano
     listOf(0f, 0.15f).forEach { delay ->
         val localProgress = ((progress - delay) / (1f - delay)).coerceIn(0f, 1f)
         if (localProgress <= 0f) return@forEach

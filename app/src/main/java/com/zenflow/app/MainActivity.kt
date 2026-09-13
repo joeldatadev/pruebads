@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
                                 Screen.LevelSelect -> LevelSelectScreen(
                                     levelRepository = levelRepository,
                                     progressRepository = progressRepository,
+                                    dailyChallengeRepository = dailyChallengeRepository,
                                     onLevelSelected = { levelId -> screen = Screen.Campaign(levelId) },
                                     onInfiniteModeSelected = {
                                         screen = Screen.Infinite(index = 1, seed = System.currentTimeMillis())
