@@ -1,22 +1,5 @@
 package com.zenflow.app.game
 
-/**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/GameScreen.kt (REEMPLAZA el archivo completo)
- *
- * Fixes de esta versión:
- * 1. "Manchado" de la línea al arrastrar: drawPaths ahora dibuja UN SOLO
- *    Path continuo por color (una sola llamada drawPath) en vez de N
- *    drawLine() por segmento -> elimina el doble-blending de alpha en
- *    cada unión.
- * 2. "Diagonal fantasma" / línea que se sale de la cuadrícula: el tramo
- *    vivo del drag ya no apunta a la posición cruda del dedo. Se snapea
- *    a la dirección dominante (horizontal/vertical) desde el centro de
- *    la última celda, limitado a 1 celda de longitud.
- * 3. Celdas saltadas en swipes rápidos: processInterpolatedDrag() recorre
- *    el segmento entre eventos de drag en pasos pequeños y llama onDrag()
- *    por cada celda distinta cruzada, EN ORDEN -> ya no se pierden pasos.
- * 4. Haptic tick ascendente por celda agregada (HapticController.onCellAdded).
- */
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
@@ -25,7 +8,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +69,7 @@ fun GameScreen(
     modifier: Modifier = Modifier
 ) {
     val viewModel: GameViewModel = viewModel(
+        key = "level=$levelId-infinite=$infiniteSeed-daily=$dailyEpochDay",
         factory = GameViewModelFactory(levelRepository, progressRepository, dailyChallengeRepository)
     )
     val uiState by viewModel.uiState.collectAsState()
@@ -151,7 +134,7 @@ fun GameScreen(
                             Text("🔥 Reto Diario", color = Color(0xFFFFD700))
                         }
                         IconButton(onClick = {
-                            hapticController.onInvalidMove() // pulso corto de confirmación
+                            hapticController.onInvalidMove()
                             viewModel.restartLevel()
                             onLevelRestarted()
                         }) {
@@ -162,6 +145,7 @@ fun GameScreen(
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         BoardLayers(
                             board = uiState.board!!,
+                            boardKey = "$levelId-$infiniteSeed-$dailyEpochDay",
                             connectedColors = uiState.connectedColors,
                             activeColor = uiState.activeColor,
                             nodeScales = nodeScales,
@@ -172,14 +156,10 @@ fun GameScreen(
                                 scope.launch { animatePulse(nodeScales, cell) }
                                 viewModel.onNodeTouched(color, cell)
                             },
-                            onDrag = { cell ->
-                                // Lee el largo ANTES/DESPUÉS via StateFlow.value (síncrono,
-                                // no depende de recomposición) para saber si la celda se
-                                // sumó de verdad -> dispara el tick háptico ascendente
-                                // solo cuando el camino realmente creció.
+                            onDrag = { cells ->
                                 val color = viewModel.uiState.value.activeColor
                                 val beforeLen = color?.let { viewModel.uiState.value.board?.paths?.get(it)?.size } ?: 0
-                                viewModel.onDrag(cell)
+                                viewModel.onDragBatch(cells)
                                 val afterLen = color?.let { viewModel.uiState.value.board?.paths?.get(it)?.size } ?: 0
                                 if (afterLen > beforeLen) hapticController.onCellAdded(afterLen)
                             },
@@ -220,23 +200,18 @@ private data class ParticleBurst(
 @Composable
 private fun BoardLayers(
     board: Board,
+    boardKey: Any,
     connectedColors: Set<PuzzleColor>,
     nodeScales: Map<Cell, Animatable<Float, AnimationVector1D>>,
     particles: List<ParticleBurst>,
     rippleProgress: Float,
     activeColor: PuzzleColor?,
     onNodeTouched: (PuzzleColor, Cell) -> Unit,
-    onDrag: (Cell) -> Unit,
+    onDrag: (List<Cell>) -> Unit,
     onDragEnd: () -> Unit
 ) {
     var cellSizePx by remember { mutableFloatStateOf(0f) }
-    // dragPosition = posición cruda del dedo, CLAMPEADA al tablero. Se usa
-    // solo para calcular el tail "snapeado" en drawPaths, nunca se dibuja
-    // directamente -> así nunca puede salirse de la cuadrícula ni cortar
-    // en diagonal, sin perder la sensación de seguir al dedo en tiempo real.
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
-    // Última posición cruda procesada, para interpolar el tramo recorrido
-    // desde el evento de drag anterior y no saltarnos celdas en swipes rápidos.
     var lastRawPosition by remember { mutableStateOf<Offset?>(null) }
 
     fun offsetToCell(offset: Offset): Cell? {
@@ -253,31 +228,22 @@ private fun BoardLayers(
         return Offset(offset.x.coerceIn(0f, maxX), offset.y.coerceIn(0f, maxY))
     }
 
-    /**
-     * Recorre el segmento entre dos posiciones crudas en pasos de ~cellSize/3 px
-     * y llama onDrag(cell) por cada celda distinta que se cruza, EN ORDEN.
-     * Esto es lo que evita que un swipe rápido "salte" celdas: sin esto,
-     * ValidateMoveUseCase rechazaría el salto por no ser adyacente y la
-     * línea se trababa o se veía entrecortada.
-     */
-    fun processInterpolatedDrag(from: Offset, to: Offset) {
-        if (cellSizePx <= 0f) return
-        val distance = (to - from).getDistance()
-        val stepPx = (cellSizePx / 3f).coerceAtLeast(4f)
-        val steps = (distance / stepPx).toInt().coerceAtLeast(1)
-        var lastCell: Cell? = null
-        for (i in 1..steps) {
-            val t = i / steps.toFloat()
-            val point = Offset(
-                x = from.x + (to.x - from.x) * t,
-                y = from.y + (to.y - from.y) * t
-            )
-            val cell = offsetToCell(point) ?: continue
-            if (cell != lastCell) {
-                onDrag(cell)
-                lastCell = cell
+    fun collectCrossedCells(from: Offset, to: Offset): List<Cell> {
+        val fromCell = offsetToCell(from) ?: return emptyList()
+        val toCell = offsetToCell(to) ?: return emptyList()
+        if (fromCell == toCell) return emptyList()
+
+        val steps = mutableListOf<Cell>()
+        var row = fromCell.row
+        var col = fromCell.col
+        while (row != toCell.row || col != toCell.col) {
+            when {
+                row != toCell.row -> row += if (toCell.row > row) 1 else -1
+                else -> col += if (toCell.col > col) 1 else -1
             }
+            steps.add(Cell(row, col))
         }
+        return steps
     }
 
     Box(
@@ -294,24 +260,21 @@ private fun BoardLayers(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(board) {
-                    detectTapGestures(
-                        onPress = { offset ->
-                            val cell = offsetToCell(offset) ?: return@detectTapGestures
-                            val node = board.nodes.firstOrNull { it.cell == cell }
+                .pointerInput(boardKey) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val cell = offsetToCell(offset)
+                            val node = cell?.let { c -> board.nodes.firstOrNull { it.cell == c } }
                             if (node != null) onNodeTouched(node.color, cell)
                             dragPosition = offset
                             lastRawPosition = offset
-                        }
-                    )
-                }
-                .pointerInput(board) {
-                    detectDragGestures(
+                        },
                         onDrag = { change, _ ->
                             change.consume()
                             val clamped = clampToBoard(change.position)
                             val previous = lastRawPosition ?: clamped
-                            processInterpolatedDrag(previous, clamped)
+                            val crossed = collectCrossedCells(previous, clamped)
+                            if (crossed.isNotEmpty()) onDrag(crossed)
                             dragPosition = clamped
                             lastRawPosition = clamped
                         },
@@ -351,20 +314,6 @@ private fun DrawScope.drawGrid(board: Board, cellSize: Float) {
     }
 }
 
-/**
- * Dibuja el camino de cada color como UN SOLO Path continuo (incluyendo el
- * tramo "vivo" del drag activo) con UNA sola llamada drawPath().
- *
- * Dos bugs resueltos aquí a la vez:
- * 1. "Manchado": dibujar segmento por segmento con drawLine() hacía que el
- *    alpha se mezclara doble en cada unión (glow semitransparente). Un Path
- *    único se compone una sola vez sin importar cuántas uniones tenga.
- * 2. "Diagonal fantasma": el tramo vivo ya NO apunta a la posición cruda del
- *    dedo. Se calcula la dirección dominante (horizontal/vertical) desde el
- *    centro de la última celda confirmada y se limita a 1 celda de longitud
- *    en esa dirección -> sigue al dedo con fluidez pero nunca puede
- *    dibujar una diagonal fuera de la cuadrícula.
- */
 private fun DrawScope.drawPaths(
     board: Board,
     cellSize: Float,
@@ -439,12 +388,10 @@ private fun DrawScope.drawParticles(particles: List<ParticleBurst>, cellSize: Fl
     }
 }
 
-/** Onda expansiva desde el centro del tablero, recorre todas las casillas al completar el nivel. */
 private fun DrawScope.drawRipple(board: Board, cellSize: Float, progress: Float) {
     val boardCenter = Offset(board.cols * cellSize / 2f, board.rows * cellSize / 2f)
     val maxRadius = kotlin.math.hypot(board.cols * cellSize, board.rows * cellSize) / 2f
 
-    // Dos anillos desfasados para dar sensación de onda con cuerpo, no un solo círculo plano
     listOf(0f, 0.15f).forEach { delay ->
         val localProgress = ((progress - delay) / (1f - delay)).coerceIn(0f, 1f)
         if (localProgress <= 0f) return@forEach

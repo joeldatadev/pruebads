@@ -1,15 +1,11 @@
 package com.zenflow.app.game
 
 /**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/GameViewModel.kt (REEMPLAZA el archivo)
- * Cambio: agrega loadDailyChallenge() usando GetDailyChallengeSeedUseCase +
- * el mismo GenerateProceduralLevelUseCase del Modo Infinito. Al completar el
- * reto del día se llama a dailyChallengeRepository.markCompleted(epochDay)
- * (separado de progressRepository, que es solo para el Pack de niveles).
- * restartLevel() ahora reconoce los tres modos (campaña / infinito / diario).
+ * Ruta destino: app/src/main/java/com/zenflow/app/game/GameViewModel.kt (REEMPLAZA el archivo completo)
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
 import com.zenflow.domain.repository.DailyChallengeRepository
@@ -107,16 +103,6 @@ class GameViewModel(
         _uiState.value = _uiState.value.copy(board = updatedBoard, activeColor = color)
     }
 
-    /**
-     * Cuando el dedo se mueve rápido, Compose puede reportar la nueva posición
-     * varias celdas más allá de la última registrada (salta intermedios). Si
-     * solo validamos el salto directo, ValidateMoveUseCase lo rechaza por "no
-     * adyacente" - pero la línea visual (que sigue la posición cruda del dedo
-     * en GameScreen) igual se estira hasta ahí, dando el efecto de diagonal
-     * que corta la cuadrícula. Arreglo: caminar celda por celda (escalera
-     * ortogonal) entre la última celda confirmada y la nueva, validando cada
-     * paso individualmente - así nunca se "salta" una celda intermedia.
-     */
     fun onDrag(targetCell: Cell) {
         val color = _uiState.value.activeColor ?: return
         val lastCell = _uiState.value.board?.paths?.get(color)?.lastOrNull() ?: return
@@ -129,13 +115,34 @@ class GameViewModel(
                 is ValidateMoveUseCase.Result.Retreat -> applyPath(board, color, result.newPath, step)
                 ValidateMoveUseCase.Result.Invalid -> {
                     _events.tryEmit(GameEvent.InvalidMove)
-                    return // se detiene en el primer paso inválido, no sigue de largo
+                    return
                 }
             }
         }
     }
 
-    /** Secuencia de celdas ortogonales (escalera: primero fila, luego columna) entre [from] y [to], sin incluir [from]. */
+    fun onDragBatch(cells: List<Cell>) {
+        val board = _uiState.value.board ?: return
+        val color = _uiState.value.activeColor ?: return
+        var currentBoard = board
+        var lastTouched: Cell? = null
+
+        for (cell in cells) {
+            when (val result = validateMove(currentBoard, color, cell)) {
+                is ValidateMoveUseCase.Result.Extend -> {
+                    currentBoard = currentBoard.withPath(color, result.newPath)
+                    lastTouched = cell
+                }
+                is ValidateMoveUseCase.Result.Retreat -> {
+                    currentBoard = currentBoard.withPath(color, result.newPath)
+                    lastTouched = cell
+                }
+                ValidateMoveUseCase.Result.Invalid -> { /* ignora, sigue con la próxima */ }
+            }
+        }
+        if (lastTouched != null) applyPath(currentBoard, color, currentBoard.paths[color].orEmpty(), lastTouched)
+    }
+
     private fun stepCellsTo(from: Cell, to: Cell): List<Cell> {
         val steps = mutableListOf<Cell>()
         var row = from.row
@@ -150,15 +157,10 @@ class GameViewModel(
         return steps
     }
 
-    fun onDragEnd() {
-        _uiState.value = _uiState.value.copy(activeColor = null)
-    }
-
-    private fun applyPath(board: com.zenflow.domain.model.Board, color: PuzzleColor, newPath: List<Cell>, lastTouchedCell: Cell) {
-        val updatedBoard = board.withPath(color, newPath)
+    private fun applyPath(board: Board, color: PuzzleColor, path: List<Cell>, lastCell: Cell) {
+        val updatedBoard = board.withPath(color, path)
         val wasConnected = color in _uiState.value.connectedColors
         val isNowConnected = checkLevelComplete.isColorConnected(updatedBoard, color)
-
         val updatedConnected = if (isNowConnected) {
             _uiState.value.connectedColors + color
         } else {
@@ -168,14 +170,15 @@ class GameViewModel(
         _uiState.value = _uiState.value.copy(board = updatedBoard, connectedColors = updatedConnected)
 
         if (isNowConnected && !wasConnected) {
-            _events.tryEmit(GameEvent.NodeSnapped(color, lastTouchedCell))
-            _events.tryEmit(GameEvent.ColorCompleted(color, lastTouchedCell))
+            _events.tryEmit(GameEvent.NodeSnapped(color, lastCell))
+            _events.tryEmit(GameEvent.ColorCompleted(color, lastCell))
         }
 
         if (checkLevelComplete.isLevelComplete(updatedBoard)) {
             val elapsed = System.currentTimeMillis() - startTimeMs
             _uiState.value = _uiState.value.copy(isLevelComplete = true, elapsedMs = elapsed)
             _events.tryEmit(GameEvent.LevelCompleted)
+
             currentLevelId?.let { levelId ->
                 viewModelScope.launch { progressRepository.markLevelCompleted(levelId) }
             }
@@ -183,5 +186,9 @@ class GameViewModel(
                 viewModelScope.launch { dailyChallengeRepository.markCompleted(epochDay) }
             }
         }
+    }
+
+    fun onDragEnd() {
+        _uiState.value = _uiState.value.copy(activeColor = null)
     }
 }
