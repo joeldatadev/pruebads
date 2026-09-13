@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "950994737182",
+    "project_id": "flowhoshira",
+    "storage_bucket": "flowhoshira.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:950994737182:android:c6c51382960b248fa5760f",
+        "android_client_info": {
+          "package_name": "com.zenflow.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALE2dO9tyljewn1vhsQwPfaQ_wTYU84ko"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

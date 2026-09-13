@@ -103,24 +103,6 @@ class GameViewModel(
         _uiState.value = _uiState.value.copy(board = updatedBoard, activeColor = color)
     }
 
-    fun onDrag(targetCell: Cell) {
-        val color = _uiState.value.activeColor ?: return
-        val lastCell = _uiState.value.board?.paths?.get(color)?.lastOrNull() ?: return
-        if (lastCell == targetCell) return
-
-        for (step in stepCellsTo(lastCell, targetCell)) {
-            val board = _uiState.value.board ?: return
-            when (val result = validateMove(board, color, step)) {
-                is ValidateMoveUseCase.Result.Extend -> applyPath(board, color, result.newPath, step)
-                is ValidateMoveUseCase.Result.Retreat -> applyPath(board, color, result.newPath, step)
-                ValidateMoveUseCase.Result.Invalid -> {
-                    _events.tryEmit(GameEvent.InvalidMove)
-                    return
-                }
-            }
-        }
-    }
-
     fun onDragBatch(cells: List<Cell>) {
         val board = _uiState.value.board ?: return
         val color = _uiState.value.activeColor ?: return
@@ -141,20 +123,6 @@ class GameViewModel(
             }
         }
         if (lastTouched != null) applyPath(currentBoard, color, currentBoard.paths[color].orEmpty(), lastTouched)
-    }
-
-    private fun stepCellsTo(from: Cell, to: Cell): List<Cell> {
-        val steps = mutableListOf<Cell>()
-        var row = from.row
-        var col = from.col
-        while (row != to.row || col != to.col) {
-            when {
-                row != to.row -> row += if (to.row > row) 1 else -1
-                else -> col += if (to.col > col) 1 else -1
-            }
-            steps.add(Cell(row, col))
-        }
-        return steps
     }
 
     private fun applyPath(board: Board, color: PuzzleColor, path: List<Cell>, lastCell: Cell) {

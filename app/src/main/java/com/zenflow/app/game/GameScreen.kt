@@ -7,7 +7,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -261,15 +263,19 @@ private fun BoardLayers(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(boardKey) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val cell = offsetToCell(offset)
-                            val node = cell?.let { c -> board.nodes.firstOrNull { it.cell == c } }
-                            if (node != null) onNodeTouched(node.color, cell)
-                            dragPosition = offset
-                            lastRawPosition = offset
-                        },
-                        onDrag = { change, _ ->
+                    // awaitEachGesture + drag() en vez de detectDragGestures: esta última
+                    // aplica "touch slop" (umbral mínimo antes de reconocer el arrastre),
+                    // lo que hace que el inicio del trazo se sienta con retraso. drag()
+                    // sigue el dedo desde el primer píxel de contacto, sin ese umbral.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val cell = offsetToCell(down.position)
+                        val node = cell?.let { c -> board.nodes.firstOrNull { it.cell == c } }
+                        if (node != null) onNodeTouched(node.color, cell)
+                        dragPosition = down.position
+                        lastRawPosition = down.position
+
+                        drag(down.id) { change ->
                             change.consume()
                             val clamped = clampToBoard(change.position)
                             val previous = lastRawPosition ?: clamped
@@ -277,18 +283,12 @@ private fun BoardLayers(
                             if (crossed.isNotEmpty()) onDrag(crossed)
                             dragPosition = clamped
                             lastRawPosition = clamped
-                        },
-                        onDragEnd = {
-                            dragPosition = null
-                            lastRawPosition = null
-                            onDragEnd()
-                        },
-                        onDragCancel = {
-                            dragPosition = null
-                            lastRawPosition = null
-                            onDragEnd()
                         }
-                    )
+
+                        dragPosition = null
+                        lastRawPosition = null
+                        onDragEnd()
+                    }
                 }
         ) {
             cellSizePx = size.width / board.cols
@@ -335,10 +335,17 @@ private fun DrawScope.drawPaths(
             val lastCenter = cellCenter(cells.last(), cellSize)
             val dx = dragPosition!!.x - lastCenter.x
             val dy = dragPosition.y - lastCenter.y
+            // Antes llegaba hasta cellSize completo (el centro de la celda vecina),
+            // lo que hacía parecer que la línea "entraba" a una celda que en
+            // realidad nunca se cruzó/validó. Con la mitad, la punta se queda
+            // dentro del área de la celda actual y solo avanza de verdad cuando
+            // el movimiento se confirma (ahí cells.last() cambia y el centro
+            // de referencia se mueve con él).
+            val reach = cellSize * 0.5f
             val snappedEnd = if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
-                Offset(lastCenter.x + dx.coerceIn(-cellSize, cellSize), lastCenter.y)
+                Offset(lastCenter.x + dx.coerceIn(-reach, reach), lastCenter.y)
             } else {
-                Offset(lastCenter.x, lastCenter.y + dy.coerceIn(-cellSize, cellSize))
+                Offset(lastCenter.x, lastCenter.y + dy.coerceIn(-reach, reach))
             }
             path.lineTo(snappedEnd.x, snappedEnd.y)
         }

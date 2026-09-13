@@ -1,14 +1,12 @@
 // Ruta: app/build.gradle.kts (REEMPLAZA el archivo completo por este)
-// Cambio: alineado a JVM 17 en vez de 11, para que coincida con :data
-// Cambio: isCoreLibraryDesugaringEnabled = true + desugar_jdk_libs
-//         -> requerido por java.time.LocalDate/ZoneOffset (Reto Diario) con minSdk 24
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -27,11 +25,21 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // TEMPORAL: firma con el keystore de debug para poder generar e
+            // instalar un APK de release YA, sin esperar al keystore real de
+            // Play Store. Bórralo cuando tengas tu keystore de producción.
+            signingConfig = signingConfigs.getByName("debug")
+
+            // Sube automáticamente el mapping file de R8 a Crashlytics, para
+            // que los stack traces de crashes en producción salgan legibles
+            // (nombres de clase/metodo reales, no ofuscados) en la consola.
+
         }
     }
     compileOptions {
@@ -44,7 +52,6 @@ android {
     }
 }
 
-// Debe coincidir con compileOptions de arriba (17), igual que en data/build.gradle.kts
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
@@ -59,10 +66,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
 
-    // Plataforma BOM de Compose (toma la versión definida en el toml)
     implementation(platform(libs.androidx.compose.bom))
-
-    // Librerías de Compose usando Version Catalog (sin harcodear strings)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -73,7 +77,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     implementation("com.google.android.gms:play-services-ads:25.4.0")
-    implementation(libs.androidx.ui.graphics)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+    // Firebase (BOM controla las versiones de todo lo de abajo)
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics")
 }
