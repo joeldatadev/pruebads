@@ -2,8 +2,8 @@ package com.zenflow.app
 
 /**
  * Ruta destino: app/src/main/java/com/zenflow/app/MainActivity.kt (REEMPLAZA el archivo)
- * Cambio: Screen sellado con 3 estados (LevelSelect / Campaign / Infinite).
- * El intersticial y el banner funcionan igual en ambos modos de juego.
+ * Cambio: Screen sellado con 4 estados (LevelSelect / Campaign / Infinite / Daily).
+ * El intersticial y el banner funcionan igual en los tres modos de juego.
  */
 
 import android.os.Bundle
@@ -28,6 +28,8 @@ import com.zenflow.app.ads.BannerAdView
 import com.zenflow.app.ads.InterstitialAdManager
 import com.zenflow.app.game.GameScreen
 import com.zenflow.app.levelselect.LevelSelectScreen
+import com.zenflow.data.daily.DailyChallengeDataStore
+import com.zenflow.data.daily.DailyChallengeRepositoryImpl
 import com.zenflow.data.level.LevelDataSource
 import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.data.progress.ProgressDataStore
@@ -38,6 +40,7 @@ private sealed class Screen {
     object LevelSelect : Screen()
     data class Campaign(val levelId: Int) : Screen()
     data class Infinite(val index: Int, val seed: Long) : Screen()
+    object Daily : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -50,6 +53,7 @@ class MainActivity : ComponentActivity() {
 
         val levelRepository = LevelRepositoryImpl(LevelDataSource(applicationContext))
         val progressRepository = ProgressRepositoryImpl(ProgressDataStore(applicationContext))
+        val dailyChallengeRepository = DailyChallengeRepositoryImpl(DailyChallengeDataStore(applicationContext))
         val interstitialAdManager = InterstitialAdManager(applicationContext)
         val adFrequencyController = AdFrequencyController()
 
@@ -81,6 +85,7 @@ class MainActivity : ComponentActivity() {
                                         levelId = current.levelId,
                                         levelRepository = levelRepository,
                                         progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
                                         onNextLevel = { proceedOrShowAd { screen = Screen.Campaign(current.levelId + 1) } },
                                         onBackToLevelSelect = { screen = Screen.LevelSelect },
                                         onLevelRestarted = { onRestarted() }
@@ -92,6 +97,7 @@ class MainActivity : ComponentActivity() {
                                         levelId = current.index,
                                         levelRepository = levelRepository,
                                         progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
                                         infiniteSeed = current.seed,
                                         onNextLevel = {
                                             proceedOrShowAd {
@@ -102,13 +108,27 @@ class MainActivity : ComponentActivity() {
                                         onLevelRestarted = { onRestarted() }
                                     )
                                 }
+                                Screen.Daily -> {
+                                    BackHandler { screen = Screen.LevelSelect }
+                                    GameScreen(
+                                        levelId = 0,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        isDailyChallenge = true,
+                                        onNextLevel = { screen = Screen.LevelSelect }, // el diario no tiene "siguiente"
+                                        onBackToLevelSelect = { screen = Screen.LevelSelect },
+                                        onLevelRestarted = { onRestarted() }
+                                    )
+                                }
                                 Screen.LevelSelect -> LevelSelectScreen(
                                     levelRepository = levelRepository,
                                     progressRepository = progressRepository,
                                     onLevelSelected = { levelId -> screen = Screen.Campaign(levelId) },
                                     onInfiniteModeSelected = {
                                         screen = Screen.Infinite(index = 1, seed = System.currentTimeMillis())
-                                    }
+                                    },
+                                    onDailyChallengeSelected = { screen = Screen.Daily }
                                 )
                             }
                         }

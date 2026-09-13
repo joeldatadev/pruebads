@@ -41,11 +41,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,7 @@ import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
 import com.zenflow.domain.repository.ProgressRepository
+import com.zenflow.domain.repository.DailyChallengeRepository
 import kotlinx.coroutines.launch
 
 @Composable
@@ -62,19 +65,27 @@ fun GameScreen(
     levelId: Int,
     levelRepository: LevelRepositoryImpl,
     progressRepository: ProgressRepository,
+    dailyChallengeRepository: DailyChallengeRepository,
     infiniteSeed: Long? = null,
+    isDailyChallenge: Boolean = false,
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
     onLevelRestarted: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val viewModel: GameViewModel = viewModel(factory = GameViewModelFactory(levelRepository, progressRepository))
+    val viewModel: GameViewModel = viewModel(
+        factory = GameViewModelFactory(levelRepository, progressRepository, dailyChallengeRepository)
+    )
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val hapticController = remember { HapticController(context) }
 
-    remember(levelId, infiniteSeed) {
-        if (infiniteSeed != null) viewModel.loadInfiniteLevel(levelId, infiniteSeed) else viewModel.loadLevel(levelId)
+    remember(levelId, infiniteSeed, isDailyChallenge) {
+        when {
+            isDailyChallenge -> viewModel.loadDailyChallenge()
+            infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed)
+            else -> viewModel.loadLevel(levelId)
+        }
         true
     }
 
@@ -217,11 +228,10 @@ private fun BoardLayers(
             .aspectRatio(board.cols.toFloat() / board.rows.toFloat())
             .fillMaxSize()
     ) {
-        Canvas(modifier = Modifier.fillMaxSize().blur(18.dp)) {
-            cellSizePx = size.width / board.cols
-            drawPaths(board, cellSizePx, glow = true, activeColor, dragPosition)
-        }
-
+        // UN SOLO Canvas: el glow ya no es un blur() de sistema sobre una capa
+        // aparte (caro y propenso a desincronizarse un frame del trazo real).
+        // Es el MISMO Path dibujado dos veces más ancho y más transparente,
+        // en el mismo frame -> imposible que se desalinee, y muchísimo más barato.
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -256,7 +266,7 @@ private fun BoardLayers(
             cellSizePx = size.width / board.cols
 
             drawGrid(board, cellSizePx)
-            drawPaths(board, cellSizePx, glow = false, activeColor, dragPosition)
+            drawPaths(board, cellSizePx, activeColor, dragPosition)
             drawNodes(board, connectedColors, nodeScales, cellSizePx)
             drawParticles(particles, cellSizePx)
             if (rippleProgress in 0f..1f && rippleProgress > 0f) {
@@ -279,45 +289,80 @@ private fun DrawScope.drawGrid(board: Board, cellSize: Float) {
 private fun DrawScope.drawPaths(
     board: Board,
     cellSize: Float,
-    glow: Boolean,
     activeColor: PuzzleColor?,
     dragPosition: Offset?
 ) {
     board.paths.forEach { (color, cells) ->
-        if (cells.size < 2) return@forEach
-        val baseColor = color.toComposeColor()
-        val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
-        val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
+        if (cells.isEmpty()) return@forEach
+        // Tramo "vivo": si este es el color que se está arrastrando ahora mismo,
+        // el Path se extiende hasta la posición REAL del dedo (sin snapear a
+        // celda) -- es lo que hace que el arrastre se sienta fluido.
+        val liveEnd = if (color == activeColor) dragPosition else null
+        drawGlowingPath(cells, liveEnd, color.toComposeColor(), cellSize)
+    }
+}
 
-        for (i in 0 until cells.size - 1) {
-            drawLine(
-                color = drawColor,
-                start = cellCenter(cells[i], cellSize),
-                end = cellCenter(cells[i + 1], cellSize),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-        }
+/**
+ * Dibuja UN solo Path continuo (con esquinas suavizadas vía quadraticTo) tres
+ * veces sobre el mismo Canvas y el mismo frame: dos capas anchas/transparentes
+ * para el resplandor de neón + una capa central angosta y brillante. Al ser
+ * el mismo Path en las tres pasadas, glow y trazo NUNCA pueden desalinearse
+ * (a diferencia de un Canvas de blur() aparte), y no hay costo de RenderEffect.
+ */
+private fun DrawScope.drawGlowingPath(
+    cells: List<Cell>,
+    liveEnd: Offset?,
+    color: Color,
+    cellSize: Float
+) {
+    val path = buildSmoothPath(cells, cellSize, liveEnd)
+
+    drawPath(
+        path,
+        color = color.copy(alpha = 0.20f),
+        style = Stroke(width = cellSize * 0.85f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+    drawPath(
+        path,
+        color = color.copy(alpha = 0.35f),
+        style = Stroke(width = cellSize * 0.55f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+    drawPath(
+        path,
+        color = color,
+        style = Stroke(width = cellSize * 0.28f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+}
+
+/**
+ * Construye un Path que pasa EXACTO por el primer y último punto (los nodos,
+ * para que la línea siempre calce con el círculo del nodo), pero redondea
+ * las esquinas interiores con quadraticTo en vez de lineTo -- así un giro de
+ * 90° se ve como una curva suave y no como dos tapas redondeadas chocando
+ * (que es lo que se veía como "mancha" en las esquinas).
+ */
+private fun buildSmoothPath(cells: List<Cell>, cellSize: Float, liveEnd: Offset?): Path {
+    val points = cells.map { cellCenter(it, cellSize) }
+    val path = Path()
+    if (points.isEmpty()) return path
+
+    path.moveTo(points.first().x, points.first().y)
+
+    if (points.size == 1) {
+        if (liveEnd != null) path.lineTo(liveEnd.x, liveEnd.y)
+        return path
     }
 
-    // Tramo "vivo": conecta la última celda confirmada con la posición REAL del
-    // dedo (sin snapear). Esto es lo que hace que el arrastre se sienta fluido
-    // en vez de saltar cuadro a cuadro.
-    if (activeColor != null && dragPosition != null) {
-        val cells = board.paths[activeColor]
-        if (!cells.isNullOrEmpty()) {
-            val baseColor = activeColor.toComposeColor()
-            val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
-            val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
-            drawLine(
-                color = drawColor,
-                start = cellCenter(cells.last(), cellSize),
-                end = dragPosition,
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-        }
+    for (i in 1 until points.size - 1) {
+        val vertex = points[i]
+        val next = points[i + 1]
+        val midToNext = Offset((vertex.x + next.x) / 2f, (vertex.y + next.y) / 2f)
+        path.quadraticBezierTo(vertex.x, vertex.y, midToNext.x, midToNext.y)
     }
+    path.lineTo(points.last().x, points.last().y)
+
+    if (liveEnd != null) path.lineTo(liveEnd.x, liveEnd.y)
+    return path
 }
 
 private fun DrawScope.drawNodes(
@@ -368,7 +413,7 @@ private fun DrawScope.drawRipple(board: Board, cellSize: Float, progress: Float)
             color = Color(0xFFFFD54F).copy(alpha = alpha),
             radius = radius,
             center = boardCenter,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = cellSize * 0.15f)
+            style = Stroke(width = cellSize * 0.15f)
         )
     }
 }

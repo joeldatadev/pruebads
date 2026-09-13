@@ -5,15 +5,17 @@ package com.zenflow.app.game
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.zenflow.domain.repository.DailyChallengeRepository
 import com.zenflow.domain.repository.LevelRepository
 import com.zenflow.domain.repository.ProgressRepository
 
 class GameViewModelFactory(
     private val levelRepository: LevelRepository,
-    private val progressRepository: ProgressRepository
+    private val progressRepository: ProgressRepository,
+    private val dailyChallengeRepository: DailyChallengeRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return GameViewModel(levelRepository, progressRepository) as T
+        return GameViewModel(levelRepository, progressRepository, dailyChallengeRepository) as T
     }
 }

@@ -2,19 +2,22 @@ package com.zenflow.app.game
 
 /**
  * Ruta destino: app/src/main/java/com/zenflow/app/game/GameViewModel.kt (REEMPLAZA el archivo)
- * Cambio: agrega loadInfiniteLevel() usando GenerateProceduralLevelUseCase.
- * En modo infinito NO se llama a progressRepository.markLevelCompleted()
- * (no hay "nivel" persistente que marcar, el tablero es generado al vuelo).
- * restartLevel() detecta automáticamente en qué modo estaba y recarga igual.
+ * Cambio: agrega loadDailyChallenge() usando GetDailyChallengeSeedUseCase +
+ * el mismo GenerateProceduralLevelUseCase del Modo Infinito. Al completar el
+ * reto del día se llama a dailyChallengeRepository.markCompleted(epochDay)
+ * (separado de progressRepository, que es solo para el Pack de niveles).
+ * restartLevel() ahora reconoce los tres modos (campaña / infinito / diario).
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zenflow.domain.model.Cell
 import com.zenflow.domain.model.PuzzleColor
+import com.zenflow.domain.repository.DailyChallengeRepository
 import com.zenflow.domain.repository.LevelRepository
 import com.zenflow.domain.repository.ProgressRepository
 import com.zenflow.domain.usecase.CheckLevelCompleteUseCase
 import com.zenflow.domain.usecase.GenerateProceduralLevelUseCase
+import com.zenflow.domain.usecase.GetDailyChallengeSeedUseCase
 import com.zenflow.domain.usecase.ValidateMoveUseCase
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,9 +30,11 @@ import kotlinx.coroutines.launch
 class GameViewModel(
     private val levelRepository: LevelRepository,
     private val progressRepository: ProgressRepository,
+    private val dailyChallengeRepository: DailyChallengeRepository,
     private val validateMove: ValidateMoveUseCase = ValidateMoveUseCase(),
     private val checkLevelComplete: CheckLevelCompleteUseCase = CheckLevelCompleteUseCase(),
-    private val generateProceduralLevel: GenerateProceduralLevelUseCase = GenerateProceduralLevelUseCase()
+    private val generateProceduralLevel: GenerateProceduralLevelUseCase = GenerateProceduralLevelUseCase(),
+    private val getDailyChallengeSeed: GetDailyChallengeSeedUseCase = GetDailyChallengeSeedUseCase()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GameUiState())
@@ -38,13 +43,15 @@ class GameViewModel(
     private val _events = MutableSharedFlow<GameEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<GameEvent> = _events.asSharedFlow()
 
-    private var currentLevelId: Int? = null           // solo modo campaña
-    private var currentInfinite: Pair<Int, Long>? = null // (index, seed) solo modo infinito
+    private var currentLevelId: Int? = null              // solo modo campaña
+    private var currentInfinite: Pair<Int, Long>? = null  // (index, seed) solo modo infinito
+    private var currentDailyEpochDay: Long? = null        // solo modo Reto Diario
     private var startTimeMs: Long = 0L
 
     fun loadLevel(levelId: Int) {
         currentLevelId = levelId
         currentInfinite = null
+        currentDailyEpochDay = null
         startTimeMs = System.currentTimeMillis()
         _uiState.value = GameUiState(isLoading = true)
         viewModelScope.launch {
@@ -57,6 +64,7 @@ class GameViewModel(
     fun loadInfiniteLevel(index: Int, seed: Long) {
         currentLevelId = null
         currentInfinite = index to seed
+        currentDailyEpochDay = null
         startTimeMs = System.currentTimeMillis()
         _uiState.value = GameUiState(isLoading = true)
         viewModelScope.launch {
@@ -66,9 +74,25 @@ class GameViewModel(
         }
     }
 
-    /** Recarga el mismo nivel/tablero, sea cual sea el modo activo (campaña o infinito). */
+    /** Reto Diario: mismo tablero para todos los jugadores en la misma fecha (ver GetDailyChallengeSeedUseCase). */
+    fun loadDailyChallenge() {
+        val daily = getDailyChallengeSeed()
+        currentLevelId = null
+        currentInfinite = null
+        currentDailyEpochDay = daily.epochDay
+        startTimeMs = System.currentTimeMillis()
+        _uiState.value = GameUiState(isLoading = true)
+        viewModelScope.launch {
+            runCatching { generateProceduralLevel(seed = daily.seed, index = daily.index) }
+                .onSuccess { board -> _uiState.value = GameUiState(isLoading = false, board = board) }
+                .onFailure { e -> _uiState.value = GameUiState(isLoading = false, errorMessage = e.message) }
+        }
+    }
+
+    /** Recarga el mismo nivel/tablero, sea cual sea el modo activo (campaña, infinito o diario). */
     fun restartLevel() {
         currentInfinite?.let { (index, seed) -> loadInfiniteLevel(index, seed); return }
+        if (currentDailyEpochDay != null) { loadDailyChallenge(); return }
         currentLevelId?.let { loadLevel(it) }
     }
 
@@ -118,6 +142,9 @@ class GameViewModel(
             _events.tryEmit(GameEvent.LevelCompleted)
             currentLevelId?.let { levelId ->
                 viewModelScope.launch { progressRepository.markLevelCompleted(levelId) }
+            }
+            currentDailyEpochDay?.let { epochDay ->
+                viewModelScope.launch { dailyChallengeRepository.markCompleted(epochDay) }
             }
         }
     }

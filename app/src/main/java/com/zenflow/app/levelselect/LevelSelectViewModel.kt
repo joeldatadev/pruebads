@@ -5,6 +5,7 @@ package com.zenflow.app.levelselect
  */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zenflow.domain.repository.DailyChallengeRepository
 import com.zenflow.domain.repository.LevelRepository
 import com.zenflow.domain.repository.ProgressRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +15,8 @@ import kotlinx.coroutines.launch
 
 class LevelSelectViewModel(
     private val levelRepository: LevelRepository,
-    private val progressRepository: ProgressRepository
+    private val progressRepository: ProgressRepository,
+    private val dailyChallengeRepository: DailyChallengeRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LevelSelectUiState())
@@ -23,6 +25,7 @@ class LevelSelectViewModel(
     init {
         loadLevels()
         observeProgress()
+        observeDailyChallenge()
     }
 
     private fun loadLevels() {
@@ -37,6 +40,14 @@ class LevelSelectViewModel(
         viewModelScope.launch {
             progressRepository.observeCompletedLevels().collect { completed ->
                 _uiState.value = _uiState.value.copy(completedLevels = completed)
+            }
+        }
+    }
+
+    private fun observeDailyChallenge() {
+        viewModelScope.launch {
+            dailyChallengeRepository.observeState().collect { state ->
+                _uiState.value = _uiState.value.copy(dailyChallengeState = state)
             }
         }
     }

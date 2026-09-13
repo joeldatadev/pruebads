@@ -1,5 +1,7 @@
 // Ruta: app/build.gradle.kts (REEMPLAZA el archivo completo por este)
 // Cambio: alineado a JVM 17 en vez de 11, para que coincida con :data
+// Cambio: isCoreLibraryDesugaringEnabled = true + desugar_jdk_libs
+//         -> requerido por java.time.LocalDate/ZoneOffset (Reto Diario) con minSdk 24
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -35,6 +37,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         compose = true
@@ -64,11 +67,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
 
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-
     implementation("com.google.android.gms:play-services-ads:25.4.0")
+    implementation(libs.androidx.ui.graphics)
 
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
