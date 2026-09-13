@@ -12,8 +12,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -231,31 +232,27 @@ private fun BoardLayers(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(board) {
-                    detectTapGestures(
-                        onPress = { offset ->
-                            val cell = offsetToCell(offset) ?: return@detectTapGestures
-                            val node = board.nodes.firstOrNull { it.cell == cell }
-                            if (node != null) onNodeTouched(node.color, cell)
-                            dragPosition = offset
-                        }
-                    )
-                }
-                .pointerInput(board) {
-                    detectDragGestures(
-                        onDrag = { change, _ ->
+                    // Un solo gesto (toque + arrastre) en vez de dos pointerInput
+                    // separados compitiendo por los mismos eventos. drag() no
+                    // aplica "touch slop" (el umbral mínimo que detectDragGestures
+                    // exige antes de reconocer el arrastre), así que la línea
+                    // arranca a seguir el dedo desde el primer píxel de contacto.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startCell = offsetToCell(down.position)
+                        val node = startCell?.let { cell -> board.nodes.firstOrNull { it.cell == cell } }
+                        if (node != null) onNodeTouched(node.color, startCell)
+                        dragPosition = down.position
+
+                        drag(down.id) { change ->
                             change.consume()
                             dragPosition = clampToBoard(change.position)
                             offsetToCell(change.position)?.let(onDrag)
-                        },
-                        onDragEnd = {
-                            dragPosition = null
-                            onDragEnd()
-                        },
-                        onDragCancel = {
-                            dragPosition = null
-                            onDragEnd()
                         }
-                    )
+
+                        dragPosition = null
+                        onDragEnd()
+                    }
                 }
         ) {
             cellSizePx = size.width / board.cols
@@ -289,9 +286,31 @@ private fun DrawScope.drawPaths(
 ) {
     board.paths.forEach { (color, cells) ->
         if (cells.isEmpty()) return@forEach
-        val liveEnd = if (color == activeColor) dragPosition else null
+        val liveEnd = if (color == activeColor) {
+            clampLiveEnd(lastPoint = cellCenter(cells.last(), cellSize), rawEnd = dragPosition, maxDistance = cellSize * 1.15f)
+        } else {
+            null
+        }
         drawGlowingPath(cells, liveEnd, color.toComposeColor(), cellSize)
     }
+}
+
+/**
+ * Evita el efecto "diagonal fuera de la cuadrícula": si el último paso del
+ * dedo fue rechazado (celda no adyacente, ocupada, etc.), dragPosition sigue
+ * actualizándose con la posición cruda del dedo, que puede estar varias
+ * celdas de distancia. Sin este límite, el tramo visual se estira en línea
+ * recta hasta ahí, cortando la cuadrícula. Con el límite, la punta nunca
+ * dibuja más allá de ~1 celda desde la última celda confirmada.
+ */
+private fun clampLiveEnd(lastPoint: Offset, rawEnd: Offset?, maxDistance: Float): Offset? {
+    if (rawEnd == null) return null
+    val dx = rawEnd.x - lastPoint.x
+    val dy = rawEnd.y - lastPoint.y
+    val distance = kotlin.math.hypot(dx, dy)
+    if (distance <= maxDistance || distance == 0f) return rawEnd
+    val scale = maxDistance / distance
+    return Offset(lastPoint.x + dx * scale, lastPoint.y + dy * scale)
 }
 
 private fun DrawScope.drawGlowingPath(

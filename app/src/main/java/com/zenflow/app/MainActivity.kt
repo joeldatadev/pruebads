@@ -2,10 +2,13 @@ package com.zenflow.app
 
 /**
  * Ruta destino: app/src/main/java/com/zenflow/app/MainActivity.kt (REEMPLAZA el archivo)
- * Cambio: Screen sellado con 4 estados (LevelSelect / Campaign / Infinite / Daily).
- * El intersticial y el banner funcionan igual en los tres modos de juego.
+ * Cambio: .windowInsetsPadding(WindowInsets.safeDrawing) en el Surface raíz.
+ * Con enableEdgeToEdge() el contenido dibuja debajo de la barra de estado,
+ * la cámara/notch y la barra de gestos - sin este padding, cualquier pantalla
+ * puede quedar tapada por esos elementos (justo lo que pasaba en tu captura).
+ * Se aplica UNA vez aquí arriba, así cubre las 4 pantallas (LevelSelect,
+ * Campaign, Infinite, Daily) sin repetirlo en cada una.
  */
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -13,8 +16,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
@@ -76,7 +82,11 @@ class MainActivity : ComponentActivity() {
                         if (shouldShowAd) interstitialAdManager.showIfAvailable(activity = this@MainActivity)
                     }
 
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                    ) {
                         Box(modifier = Modifier.weight(1f)) {
                             when (val current = screen) {
                                 is Screen.Campaign -> {
@@ -116,7 +126,7 @@ class MainActivity : ComponentActivity() {
                                         progressRepository = progressRepository,
                                         dailyChallengeRepository = dailyChallengeRepository,
                                         isDailyChallenge = true,
-                                        onNextLevel = { screen = Screen.LevelSelect }, // el diario no tiene "siguiente"
+                                        onNextLevel = { screen = Screen.LevelSelect },
                                         onBackToLevelSelect = { screen = Screen.LevelSelect },
                                         onLevelRestarted = { onRestarted() }
                                     )

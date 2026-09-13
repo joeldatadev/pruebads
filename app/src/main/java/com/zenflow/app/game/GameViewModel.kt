@@ -102,16 +102,47 @@ class GameViewModel(
         _uiState.value = _uiState.value.copy(board = updatedBoard, activeColor = color)
     }
 
+    /**
+     * Cuando el dedo se mueve rápido, Compose puede reportar la nueva posición
+     * varias celdas más allá de la última registrada (salta intermedios). Si
+     * solo validamos el salto directo, ValidateMoveUseCase lo rechaza por "no
+     * adyacente" - pero la línea visual (que sigue la posición cruda del dedo
+     * en GameScreen) igual se estira hasta ahí, dando el efecto de diagonal
+     * que corta la cuadrícula. Arreglo: caminar celda por celda (escalera
+     * ortogonal) entre la última celda confirmada y la nueva, validando cada
+     * paso individualmente - así nunca se "salta" una celda intermedia.
+     */
     fun onDrag(targetCell: Cell) {
-        val state = _uiState.value
-        val board = state.board ?: return
-        val color = state.activeColor ?: return
+        val color = _uiState.value.activeColor ?: return
+        val lastCell = _uiState.value.board?.paths?.get(color)?.lastOrNull() ?: return
+        if (lastCell == targetCell) return
 
-        when (val result = validateMove(board, color, targetCell)) {
-            is ValidateMoveUseCase.Result.Extend -> applyPath(board, color, result.newPath, targetCell)
-            is ValidateMoveUseCase.Result.Retreat -> applyPath(board, color, result.newPath, targetCell)
-            ValidateMoveUseCase.Result.Invalid -> _events.tryEmit(GameEvent.InvalidMove)
+        for (step in stepCellsTo(lastCell, targetCell)) {
+            val board = _uiState.value.board ?: return
+            when (val result = validateMove(board, color, step)) {
+                is ValidateMoveUseCase.Result.Extend -> applyPath(board, color, result.newPath, step)
+                is ValidateMoveUseCase.Result.Retreat -> applyPath(board, color, result.newPath, step)
+                ValidateMoveUseCase.Result.Invalid -> {
+                    _events.tryEmit(GameEvent.InvalidMove)
+                    return // se detiene en el primer paso inválido, no sigue de largo
+                }
+            }
         }
+    }
+
+    /** Secuencia de celdas ortogonales (escalera: primero fila, luego columna) entre [from] y [to], sin incluir [from]. */
+    private fun stepCellsTo(from: Cell, to: Cell): List<Cell> {
+        val steps = mutableListOf<Cell>()
+        var row = from.row
+        var col = from.col
+        while (row != to.row || col != to.col) {
+            when {
+                row != to.row -> row += if (to.row > row) 1 else -1
+                else -> col += if (to.col > col) 1 else -1
+            }
+            steps.add(Cell(row, col))
+        }
+        return steps
     }
 
     fun onDragEnd() {
