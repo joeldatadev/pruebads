@@ -18,13 +18,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import com.zenflow.app.levelselect.LevelSelectionScreen
+import com.zenflow.app.mainmenu.MainMenuScreen
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.ads.MobileAds
 import com.zenflow.app.ads.BannerAdView
 import com.zenflow.app.ads.InterstitialAdManager
 import com.zenflow.app.game.GameScreen
-import com.zenflow.app.levelselect.LevelSelectScreen
 import com.zenflow.app.settings.SettingsScreen
 import com.zenflow.data.daily.DailyChallengeDataStore
 import com.zenflow.data.daily.DailyChallengeRepositoryImpl
@@ -38,7 +40,8 @@ import com.zenflow.domain.ads.AdFrequencyController
 import java.time.LocalDate
 
 private sealed class Screen {
-    object LevelSelect : Screen()
+    object MainMenu : Screen()
+    object LevelSelection : Screen()
     data class Campaign(val levelId: Int) : Screen()
     data class Infinite(val index: Int, val seed: Long) : Screen()
     object Daily : Screen()
@@ -62,8 +65,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    var screen by remember { mutableStateOf<Screen>(Screen.LevelSelect) }
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color(0xFF0F172A) // Background Base (Slate Dark)
+                ) {
+                    var screen by remember { mutableStateOf<Screen>(Screen.MainMenu) }
 
                     fun proceedOrShowAd(navigate: () -> Unit) {
                         val shouldShowAd = adFrequencyController.onLevelCompleted(System.currentTimeMillis())
@@ -87,7 +93,7 @@ class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.weight(1f)) {
                             when (val current = screen) {
                                 is Screen.Campaign -> {
-                                    BackHandler { screen = Screen.LevelSelect }
+                                    BackHandler { screen = Screen.LevelSelection }
                                     GameScreen(
                                         levelId = current.levelId,
                                         levelRepository = levelRepository,
@@ -95,12 +101,13 @@ class MainActivity : ComponentActivity() {
                                         dailyChallengeRepository = dailyChallengeRepository,
                                         settingsRepository = settingsRepository,
                                         onNextLevel = { proceedOrShowAd { screen = Screen.Campaign(current.levelId + 1) } },
-                                        onBackToLevelSelect = { screen = Screen.LevelSelect },
-                                        onLevelRestarted = { onRestarted() }
+                                        onBackToLevelSelect = { screen = Screen.LevelSelection },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
                                 is Screen.Infinite -> {
-                                    BackHandler { screen = Screen.LevelSelect }
+                                    BackHandler { screen = Screen.MainMenu }
                                     GameScreen(
                                         levelId = current.index,
                                         levelRepository = levelRepository,
@@ -113,12 +120,13 @@ class MainActivity : ComponentActivity() {
                                                 screen = Screen.Infinite(current.index + 1, System.currentTimeMillis())
                                             }
                                         },
-                                        onBackToLevelSelect = { screen = Screen.LevelSelect },
-                                        onLevelRestarted = { onRestarted() }
+                                        onBackToLevelSelect = { screen = Screen.LevelSelection },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
                                 Screen.Daily -> {
-                                    BackHandler { screen = Screen.LevelSelect }
+                                    BackHandler { screen = Screen.MainMenu }
                                     GameScreen(
                                         levelId = 0,
                                         levelRepository = levelRepository,
@@ -126,23 +134,34 @@ class MainActivity : ComponentActivity() {
                                         dailyChallengeRepository = dailyChallengeRepository,
                                         settingsRepository = settingsRepository,
                                         dailyEpochDay = LocalDate.now().toEpochDay(),
-                                        onNextLevel = { screen = Screen.LevelSelect },
-                                        onBackToLevelSelect = { screen = Screen.LevelSelect },
-                                        onLevelRestarted = { onRestarted() }
+                                        onNextLevel = { screen = Screen.MainMenu },
+                                        onBackToLevelSelect = { screen = Screen.LevelSelection },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
                                 Screen.Settings -> {
-                                    BackHandler { screen = Screen.LevelSelect }
+                                    BackHandler { screen = Screen.MainMenu }
                                     SettingsScreen(
                                         settingsRepository = settingsRepository,
-                                        onBack = { screen = Screen.LevelSelect }
+                                        onBack = { screen = Screen.MainMenu }
                                     )
                                 }
-                                Screen.LevelSelect -> LevelSelectScreen(
+                                Screen.LevelSelection -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    LevelSelectionScreen(
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        onLevelSelected = { levelId -> screen = Screen.Campaign(levelId) },
+                                        onBack = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                Screen.MainMenu -> MainMenuScreen(
                                     levelRepository = levelRepository,
                                     progressRepository = progressRepository,
                                     dailyChallengeRepository = dailyChallengeRepository,
-                                    onLevelSelected = { levelId -> screen = Screen.Campaign(levelId) },
+                                    onCampaignSelected = { screen = Screen.LevelSelection },
                                     onInfiniteModeSelected = {
                                         screen = Screen.Infinite(index = 1, seed = System.currentTimeMillis())
                                     },

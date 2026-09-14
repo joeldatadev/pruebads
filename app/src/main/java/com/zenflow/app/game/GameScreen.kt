@@ -21,11 +21,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -51,13 +52,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
-import com.zenflow.domain.repository.GameSettings
 import com.zenflow.domain.model.PuzzleColor
 import com.zenflow.domain.repository.DailyChallengeRepository
+import com.zenflow.domain.repository.GameSettings
+import com.zenflow.domain.repository.LevelRepository
 import com.zenflow.domain.repository.ProgressRepository
 import com.zenflow.domain.repository.SettingsRepository
 import kotlinx.coroutines.launch
@@ -65,7 +68,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun GameScreen(
     levelId: Int,
-    levelRepository: LevelRepositoryImpl,
+    levelRepository: LevelRepository,
     progressRepository: ProgressRepository,
     dailyChallengeRepository: DailyChallengeRepository,
     settingsRepository: SettingsRepository,
@@ -74,6 +77,7 @@ fun GameScreen(
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
     onLevelRestarted: () -> Unit = {},
+    onGoToMainMenu: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: GameViewModel = viewModel(
@@ -83,6 +87,8 @@ fun GameScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val hapticController = remember { HapticController(context) }
+    
+    var isPaused by remember { mutableStateOf(false) }
 
     val settings by settingsRepository.observeSettings().collectAsState(initial = GameSettings())
     LaunchedEffect(settings.hapticsEnabled) {
@@ -135,40 +141,61 @@ fun GameScreen(
             uiState.isLoading -> CircularProgressIndicator()
             uiState.errorMessage != null -> Text("Error: ${uiState.errorMessage}")
             uiState.board != null -> {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF0F172A)) // Base background
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onBackToLevelSelect) {
-                            Text(if (dailyEpochDay != null) "← Salir" else "← Niveles")
+                        IconButton(
+                            onClick = { isPaused = true },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            Icon(Icons.Filled.Pause, contentDescription = "Pausa", tint = Color.White)
                         }
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (dailyEpochDay != null) {
-                                Text("🔥 Reto Diario  ", color = Color(0xFFFFD700))
+                                Text("🔥 Daily ", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
+                            } else {
+                                Text("Nivel $levelId ", color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
                             }
+                            
                             val totalColors = uiState.board?.nodes?.map { it.color }?.distinct()?.size ?: 0
                             Box(
                                 modifier = Modifier
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
-                                    .background(Color(0xFF00E5FF).copy(alpha = 0.16f))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    "${uiState.connectedColors.size}/$totalColors",
-                                    color = Color(0xFF00E5FF),
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    "${uiState.connectedColors.size} / $totalColors",
+                                    color = Color(0xFF10B981),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
                                 )
                             }
                         }
-                        IconButton(onClick = {
-                            hapticController.onInvalidMove()
-                            viewModel.restartLevel()
-                            onLevelRestarted()
-                        }) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Reiniciar nivel")
+
+                        IconButton(
+                            onClick = {
+                                hapticController.onInvalidMove()
+                                viewModel.restartLevel()
+                                onLevelRestarted()
+                            },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Reiniciar nivel", tint = Color.White)
                         }
                     }
 
@@ -202,6 +229,18 @@ fun GameScreen(
                             elapsedMs = uiState.elapsedMs,
                             onNextLevel = onNextLevel,
                             onBackToLevelSelect = onBackToLevelSelect
+                        )
+
+                        PauseMenuOverlay(
+                            visible = isPaused,
+                            onResume = { isPaused = false },
+                            onRestart = {
+                                isPaused = false
+                                viewModel.restartLevel()
+                                onLevelRestarted()
+                            },
+                            onGoToLevelSelect = onBackToLevelSelect,
+                            onGoToMainMenu = onGoToMainMenu
                         )
                     }
                 }
@@ -244,9 +283,13 @@ private fun BoardLayers(
 ) {
     var cellSizePx by remember { mutableFloatStateOf(0f) }
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
-    var lastRawPosition by remember { mutableStateOf<Offset?>(null) }
     var lastTapTime by remember { mutableStateOf(0L) }
     var lastTapCell by remember { mutableStateOf<Cell?>(null) }
+
+    // Usamos rememberUpdatedState para que el bloque pointerInput siempre lea 
+    // el estado más reciente del tablero sin necesidad de reiniciarse.
+    val currentBoardState by rememberUpdatedState(board)
+    val currentConnectedState by rememberUpdatedState(connectedColors)
 
     fun offsetToCell(offset: Offset): Cell? {
         if (cellSizePx <= 0f) return null
@@ -256,24 +299,33 @@ private fun BoardLayers(
         return Cell(row, col)
     }
 
+    /** Solución al Problema 2: CoerceIn para no perder el foco fuera de límites. */
+    fun offsetToCellClamped(offset: Offset): Cell? {
+        if (cellSizePx <= 0f) return null
+        val col = (offset.x / cellSizePx).toInt().coerceIn(0, board.cols - 1)
+        val row = (offset.y / cellSizePx).toInt().coerceIn(0, board.rows - 1)
+        return Cell(row, col)
+    }
+
     fun clampToBoard(offset: Offset): Offset {
         val maxX = board.cols * cellSizePx
         val maxY = board.rows * cellSizePx
         return Offset(offset.x.coerceIn(0f, maxX), offset.y.coerceIn(0f, maxY))
     }
 
-    fun collectCrossedCells(from: Offset, to: Offset): List<Cell> {
-        val fromCell = offsetToCell(from) ?: return emptyList()
-        val toCell = offsetToCell(to) ?: return emptyList()
-        if (fromCell == toCell) return emptyList()
-
+    /** 
+     * Calcula las celdas intermedias para asegurar continuidad en movimientos rápidos.
+     * Siempre se ancla a la última celda real del path para evitar "saltos" inválidos.
+     */
+    fun crossedCellsFrom(startCell: Cell, targetCell: Cell): List<Cell> {
+        if (startCell == targetCell) return emptyList()
         val steps = mutableListOf<Cell>()
-        var row = fromCell.row
-        var col = fromCell.col
-        while (row != toCell.row || col != toCell.col) {
+        var row = startCell.row
+        var col = startCell.col
+        while (row != targetCell.row || col != targetCell.col) {
             when {
-                row != toCell.row -> row += if (toCell.row > row) 1 else -1
-                else -> col += if (toCell.col > col) 1 else -1
+                row != targetCell.row -> row += if (targetCell.row > row) 1 else -1
+                else -> col += if (targetCell.col > col) 1 else -1
             }
             steps.add(Cell(row, col))
         }
@@ -297,58 +349,62 @@ private fun BoardLayers(
                 .pointerInput(boardKey) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val cell = offsetToCell(down.position)
+                        val downCell = offsetToCell(down.position)
                         val now = System.currentTimeMillis()
+                        
                         var touchedColor: PuzzleColor? = null
+                        var lastTrackedCell: Cell? = null
 
-                        if (cell != null) {
-                            val node = board.nodes.firstOrNull { it.cell == cell }
-                            val isDoubleTap = node != null && cell == lastTapCell && (now - lastTapTime) < 300
-                            lastTapTime = now
-                            lastTapCell = cell
-
-                            if (isDoubleTap && node != null) {
-                                onClearColor(node.color)
-                            } else {
-                                val ownerColor = board.paths.entries.firstOrNull { (_, cells) -> cell in cells }?.key
-                                touchedColor = node?.color ?: ownerColor
+                        if (downCell != null) {
+                            val liveBoard = currentBoardState
+                            val liveConnected = currentConnectedState
+                            val node = liveBoard.nodes.firstOrNull { it.cell == downCell }
+                            
+                            // Solución al Problema 1: Detección de color en nodos O en el trazo existente.
+                            val pathColor = liveBoard.paths.entries.firstOrNull { downCell in it.value }?.key
+                            val candidate = node?.color ?: pathColor
+                            
+                            if (candidate != null && candidate !in liveConnected) {
+                                val isDoubleTap = node != null && downCell == lastTapCell && (now - lastTapTime) < 300
+                                if (isDoubleTap) {
+                                    onClearColor(candidate)
+                                } else {
+                                    onNodeTouched(candidate, downCell)
+                                    touchedColor = candidate
+                                    lastTrackedCell = downCell
+                                }
                             }
+                            lastTapTime = now
+                            lastTapCell = downCell
                         }
+                        
                         dragPosition = down.position
-                        lastRawPosition = down.position
-
-                        // OJO: onNodeTouched() recorta el camino existente hasta la celda
-                        // tocada (necesario para poder re-dibujar arrastrando desde un nodo
-                        // ya conectado). Si se llamara aquí, en el down, un simple tap sin
-                        // arrastre ya borraría un color completo -- por eso se difiere hasta
-                        // que el dedo cruce de verdad a OTRA celda de la grilla (no alcanza
-                        // con cualquier micro-movimiento: el ruido del sensor táctil puede
-                        // mover la posición unos sub-píxeles incluso en un tap "quieto", pero
-                        // eso nunca cambia la celda calculada, así que nunca dispara el corte).
-                        var didDrag = false
 
                         drag(down.id) { change ->
                             change.consume()
                             val clamped = clampToBoard(change.position)
-                            val previous = lastRawPosition ?: clamped
-                            val crossed = collectCrossedCells(previous, clamped)
-
-                            if (crossed.isNotEmpty()) {
-                                if (!didDrag) {
-                                    val safeColor = touchedColor
-                                    if (safeColor != null && cell != null) onNodeTouched(safeColor, cell)
-                                    didDrag = true
-                                }
-                                onDrag(crossed)
-                            }
-
                             dragPosition = clamped
-                            lastRawPosition = clamped
+                            
+                            val targetCell = offsetToCellClamped(clamped)
+                            val color = touchedColor
+                            
+                            if (color != null && targetCell != null) {
+                                // Siempre obtenemos la punta real del path desde el estado actualizado
+                                val livePath = currentBoardState.paths[color]
+                                val head = livePath?.lastOrNull() ?: lastTrackedCell
+                                
+                                if (head != null && targetCell != head) {
+                                    val steps = crossedCellsFrom(head, targetCell)
+                                    if (steps.isNotEmpty()) {
+                                        onDrag(steps)
+                                        lastTrackedCell = targetCell
+                                    }
+                                }
+                            }
                         }
 
                         dragPosition = null
-                        lastRawPosition = null
-                        if (didDrag) onDragEnd()
+                        onDragEnd()
                     }
                 }
         ) {

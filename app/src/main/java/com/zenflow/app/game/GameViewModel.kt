@@ -1,12 +1,10 @@
 package com.zenflow.app.game
 
-/**
- * Ruta destino: app/src/main/java/com/zenflow/app/game/GameViewModel.kt (REEMPLAZA el archivo completo)
- */
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zenflow.domain.model.Board
 import com.zenflow.domain.model.Cell
+import com.zenflow.domain.model.Node
 import com.zenflow.domain.model.PuzzleColor
 import com.zenflow.domain.repository.DailyChallengeRepository
 import com.zenflow.domain.repository.LevelRepository
@@ -22,160 +20,213 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 class GameViewModel(
     private val levelRepository: LevelRepository,
     private val progressRepository: ProgressRepository,
-    private val dailyChallengeRepository: DailyChallengeRepository,
-    private val validateMove: ValidateMoveUseCase = ValidateMoveUseCase(),
-    private val checkLevelComplete: CheckLevelCompleteUseCase = CheckLevelCompleteUseCase(),
-    private val generateProceduralLevel: GenerateProceduralLevelUseCase = GenerateProceduralLevelUseCase(),
-    private val getDailyChallengeSeed: GetDailyChallengeSeedUseCase = GetDailyChallengeSeedUseCase()
+    private val dailyChallengeRepository: DailyChallengeRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
-    private val _events = MutableSharedFlow<GameEvent>(extraBufferCapacity = 4)
+    private val _events = MutableSharedFlow<GameEvent>()
     val events: SharedFlow<GameEvent> = _events.asSharedFlow()
 
-    private var currentLevelId: Int? = null              // solo modo campaña
-    private var currentInfinite: Pair<Int, Long>? = null  // (index, seed) solo modo infinito
-    private var currentDailyEpochDay: Long? = null        // solo modo Reto Diario
-    private var startTimeMs: Long = 0L
+    private val generateProceduralLevel = GenerateProceduralLevelUseCase()
+    private val getDailyChallengeSeed = GetDailyChallengeSeedUseCase()
+    private val validateMove = ValidateMoveUseCase()
+    private val checkComplete = CheckLevelCompleteUseCase()
+
+    private var currentLevelId: Int? = null
+    private var currentDailyEpochDay: Long? = null
+    private var startTime: Long = 0
 
     fun loadLevel(levelId: Int) {
         currentLevelId = levelId
-        currentInfinite = null
         currentDailyEpochDay = null
-        startTimeMs = System.currentTimeMillis()
-        _uiState.value = GameUiState(isLoading = true)
         viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
             runCatching { levelRepository.getLevel(levelId) }
-                .onSuccess { board -> _uiState.value = GameUiState(isLoading = false, board = board) }
-                .onFailure { e -> _uiState.value = GameUiState(isLoading = false, errorMessage = e.message) }
+                .onSuccess { board ->
+                    _uiState.value = GameUiState(
+                        isLoading = false,
+                        board = board
+                    )
+                    startTime = System.currentTimeMillis()
+                }
+                .onFailure { e ->
+                    _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+                }
         }
     }
 
-    fun loadInfiniteLevel(index: Int, seed: Long) {
+    fun loadDailyChallenge(epochDay: Long) {
         currentLevelId = null
-        currentInfinite = index to seed
+        currentDailyEpochDay = epochDay
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching {
+                val challenge = getDailyChallengeSeed(java.time.LocalDate.ofEpochDay(epochDay))
+                generateProceduralLevel(seed = challenge.seed, index = challenge.index)
+            }.onSuccess { board ->
+                _uiState.value = GameUiState(
+                    isLoading = false,
+                    board = board
+                )
+                startTime = System.currentTimeMillis()
+            }.onFailure { e ->
+                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+            }
+        }
+    }
+
+    fun loadInfiniteLevel(levelId: Int, seed: Long) {
+        currentLevelId = levelId
         currentDailyEpochDay = null
-        startTimeMs = System.currentTimeMillis()
-        _uiState.value = GameUiState(isLoading = true)
         viewModelScope.launch {
-            runCatching { generateProceduralLevel(seed = seed, index = index) }
-                .onSuccess { board -> _uiState.value = GameUiState(isLoading = false, board = board) }
-                .onFailure { e -> _uiState.value = GameUiState(isLoading = false, errorMessage = e.message) }
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching {
+                // For infinite mode, difficulty index scales with levelId
+                generateProceduralLevel(seed = seed, index = levelId)
+            }.onSuccess { board ->
+                _uiState.value = GameUiState(
+                    isLoading = false,
+                    board = board
+                )
+                startTime = System.currentTimeMillis()
+            }.onFailure { e ->
+                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+            }
         }
-    }
-
-    /** Reto Diario: mismo tablero para todos los jugadores en la misma fecha (ver GetDailyChallengeSeedUseCase). */
-    fun loadDailyChallenge(epochDay: Long? = null) {
-        val daily = if (epochDay != null) {
-            getDailyChallengeSeed(LocalDate.ofEpochDay(epochDay))
-        } else {
-            getDailyChallengeSeed()
-        }
-
-        currentLevelId = null
-        currentInfinite = null
-        currentDailyEpochDay = daily.epochDay
-        startTimeMs = System.currentTimeMillis()
-        _uiState.value = GameUiState(isLoading = true)
-        viewModelScope.launch {
-            runCatching { generateProceduralLevel(seed = daily.seed, index = daily.index) }
-                .onSuccess { board -> _uiState.value = GameUiState(isLoading = false, board = board) }
-                .onFailure { e -> _uiState.value = GameUiState(isLoading = false, errorMessage = e.message) }
-        }
-    }
-
-    fun restartLevel() {
-        currentInfinite?.let { (index, seed) -> loadInfiniteLevel(index, seed); return }
-        currentDailyEpochDay?.let { epochDay -> loadDailyChallenge(epochDay); return }
-        currentLevelId?.let { loadLevel(it) }
-    }
-    fun clearColorPath(color: PuzzleColor) {
-        val board = _uiState.value.board ?: return
-        val node = board.nodes.firstOrNull { it.color == color } ?: return
-        val updatedBoard = board.withPath(color, listOf(node.cell))
-        _uiState.value = _uiState.value.copy(
-            board = updatedBoard,
-            connectedColors = _uiState.value.connectedColors - color
-        )
     }
 
     fun onNodeTouched(color: PuzzleColor, cell: Cell) {
         val board = _uiState.value.board ?: return
-        val existingPath = board.paths[color].orEmpty()
-        val indexInPath = existingPath.indexOf(cell)
+        if (_uiState.value.isLevelComplete) return
+        if (color in _uiState.value.connectedColors) return
 
-        val updatedBoard = if (indexInPath != -1) {
-            // La celda ya es parte del camino de este color (nodo o intermedia,
-            // incluye el caso donde el gesto se canceló al salir del tablero):
-            // recorta el camino hasta ahí en vez de reiniciarlo a 1 celda.
-            board.withPath(color, existingPath.subList(0, indexInPath + 1))
-        } else {
-            board.withPath(color, listOf(cell))
+        val path = board.paths[color] ?: emptyList()
+        val node = board.nodes.firstOrNull { it.cell == cell && it.color == color }
+
+        val newBoard = when {
+            // Resume: Si tocamos la punta del camino, no cambiamos nada, solo activamos el color
+            path.isNotEmpty() && path.last() == cell -> {
+                board
+            }
+            // Reinicio: Si tocamos el nodo inicial y ya había camino, reiniciamos a solo ese nodo
+            node != null && path.firstOrNull() == cell -> {
+                board.withPath(color, listOf(cell))
+            }
+            // Trim/Resume: Si tocamos una casilla que ya está en el camino, recortamos hasta ahí
+            path.contains(cell) -> {
+                val index = path.indexOf(cell)
+                board.withPath(color, path.subList(0, index + 1))
+            }
+            // Inicio: Si tocamos un nodo y no hay camino, empezamos
+            node != null -> {
+                board.withPath(color, listOf(cell))
+            }
+            else -> board
         }
-        _uiState.value = _uiState.value.copy(board = updatedBoard, activeColor = color)
+
+        _uiState.value = _uiState.value.copy(
+            board = newBoard,
+            activeColor = color
+        )
+        
+        if (newBoard !== board) {
+            checkProgress(newBoard, color, cell)
+        }
     }
 
     fun onDragBatch(cells: List<Cell>) {
-        val board = _uiState.value.board ?: return
+        var board = _uiState.value.board ?: return
         val color = _uiState.value.activeColor ?: return
-        var currentBoard = board
-        var lastTouched: Cell? = null
+        if (_uiState.value.isLevelComplete) return
+        if (color in _uiState.value.connectedColors) return
 
         for (cell in cells) {
-            when (val result = validateMove(currentBoard, color, cell)) {
+            val result = validateMove(board, color, cell)
+            when (result) {
                 is ValidateMoveUseCase.Result.Extend -> {
-                    currentBoard = currentBoard.withPath(color, result.newPath)
-                    lastTouched = cell
+                    board = board.withPath(color, result.newPath)
+                    checkProgress(board, color, cell)
+                    // If we just connected the color, stop dragging for this batch
+                    if (color in _uiState.value.connectedColors) break
                 }
                 is ValidateMoveUseCase.Result.Retreat -> {
-                    currentBoard = currentBoard.withPath(color, result.newPath)
-                    lastTouched = cell
+                    board = board.withPath(color, result.newPath)
+                    checkProgress(board, color, cell)
                 }
-                ValidateMoveUseCase.Result.Invalid -> { /* ignora, sigue con la próxima */ }
+                ValidateMoveUseCase.Result.Invalid -> {
+                    viewModelScope.launch { _events.emit(GameEvent.InvalidMove) }
+                    break
+                }
             }
         }
-        if (lastTouched != null) applyPath(currentBoard, color, currentBoard.paths[color].orEmpty(), lastTouched)
+
+        _uiState.value = _uiState.value.copy(board = board)
     }
 
-    private fun applyPath(board: Board, color: PuzzleColor, path: List<Cell>, lastCell: Cell) {
-        val updatedBoard = board.withPath(color, path)
+    fun onDragEnd() {
+        _uiState.value = _uiState.value.copy(activeColor = null)
+    }
+
+    fun clearColorPath(color: PuzzleColor) {
+        val board = _uiState.value.board ?: return
+        if (color in _uiState.value.connectedColors) return
+
+        val newBoard = board.clearPath(color)
+        _uiState.value = _uiState.value.copy(board = newBoard)
+        checkProgress(newBoard, color, null)
+    }
+
+    fun restartLevel() {
+        val board = _uiState.value.board ?: return
+        val clearedBoard = board.copy(paths = emptyMap())
+        _uiState.value = _uiState.value.copy(
+            board = clearedBoard,
+            connectedColors = emptySet(),
+            isLevelComplete = false,
+            elapsedMs = null
+        )
+        startTime = System.currentTimeMillis()
+    }
+
+    private fun checkProgress(board: Board, color: PuzzleColor, atCell: Cell?) {
+        val isConnected = checkComplete.isColorConnected(board, color)
         val wasConnected = color in _uiState.value.connectedColors
-        val isNowConnected = checkLevelComplete.isColorConnected(updatedBoard, color)
-        val updatedConnected = if (isNowConnected) {
+
+        val newConnectedColors = if (isConnected) {
             _uiState.value.connectedColors + color
         } else {
             _uiState.value.connectedColors - color
         }
 
-        _uiState.value = _uiState.value.copy(board = updatedBoard, connectedColors = updatedConnected)
-
-        if (isNowConnected && !wasConnected) {
-            _events.tryEmit(GameEvent.NodeSnapped(color, lastCell))
-            _events.tryEmit(GameEvent.ColorCompleted(color, lastCell))
-        }
-
-        if (checkLevelComplete.isLevelComplete(updatedBoard)) {
-            val elapsed = System.currentTimeMillis() - startTimeMs
-            _uiState.value = _uiState.value.copy(isLevelComplete = true, elapsedMs = elapsed)
-            _events.tryEmit(GameEvent.LevelCompleted)
-
-            currentLevelId?.let { levelId ->
-                viewModelScope.launch { progressRepository.markLevelCompleted(levelId) }
-            }
-            currentDailyEpochDay?.let { epochDay ->
-                viewModelScope.launch { dailyChallengeRepository.markCompleted(epochDay) }
+        if (isConnected && !wasConnected && atCell != null) {
+            viewModelScope.launch {
+                _events.emit(GameEvent.NodeSnapped(color, atCell))
+                _events.emit(GameEvent.ColorCompleted(color, atCell))
             }
         }
-    }
 
-    fun onDragEnd() {
-        _uiState.value = _uiState.value.copy(activeColor = null)
+        val isLevelComplete = checkComplete.isLevelComplete(board)
+
+        if (isLevelComplete && !_uiState.value.isLevelComplete) {
+            val elapsed = System.currentTimeMillis() - startTime
+            _uiState.value = _uiState.value.copy(
+                connectedColors = newConnectedColors,
+                isLevelComplete = true,
+                elapsedMs = elapsed
+            )
+            viewModelScope.launch {
+                _events.emit(GameEvent.LevelCompleted)
+                currentLevelId?.let { progressRepository.markLevelCompleted(it) }
+                currentDailyEpochDay?.let { dailyChallengeRepository.markCompleted(it) }
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(connectedColors = newConnectedColors)
+        }
     }
 }
