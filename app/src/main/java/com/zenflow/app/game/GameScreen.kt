@@ -7,6 +7,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenflow.data.level.LevelRepositoryImpl
 import com.zenflow.domain.model.Board
@@ -135,7 +138,8 @@ fun GameScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onBackToLevelSelect) {
                             Text(if (dailyEpochDay != null) "← Salir" else "← Niveles")
@@ -145,11 +149,19 @@ fun GameScreen(
                                 Text("🔥 Reto Diario  ", color = Color(0xFFFFD700))
                             }
                             val totalColors = uiState.board?.nodes?.map { it.color }?.distinct()?.size ?: 0
-                            Text(
-                                "${uiState.connectedColors.size}/$totalColors",
-                                color = Color(0xFF00E5FF),
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                    .background(Color(0xFF00E5FF).copy(alpha = 0.16f))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    "${uiState.connectedColors.size}/$totalColors",
+                                    color = Color(0xFF00E5FF),
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
                         }
                         IconButton(onClick = {
                             hapticController.onInvalidMove()
@@ -287,6 +299,7 @@ private fun BoardLayers(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val cell = offsetToCell(down.position)
                         val now = System.currentTimeMillis()
+                        var touchedColor: PuzzleColor? = null
 
                         if (cell != null) {
                             val node = board.nodes.firstOrNull { it.cell == cell }
@@ -298,26 +311,44 @@ private fun BoardLayers(
                                 onClearColor(node.color)
                             } else {
                                 val ownerColor = board.paths.entries.firstOrNull { (_, cells) -> cell in cells }?.key
-                                val colorToActivate = node?.color ?: ownerColor
-                                if (colorToActivate != null) onNodeTouched(colorToActivate, cell)
+                                touchedColor = node?.color ?: ownerColor
                             }
                         }
                         dragPosition = down.position
                         lastRawPosition = down.position
+
+                        // OJO: onNodeTouched() recorta el camino existente hasta la celda
+                        // tocada (necesario para poder re-dibujar arrastrando desde un nodo
+                        // ya conectado). Si se llamara aquí, en el down, un simple tap sin
+                        // arrastre ya borraría un color completo -- por eso se difiere hasta
+                        // que el dedo cruce de verdad a OTRA celda de la grilla (no alcanza
+                        // con cualquier micro-movimiento: el ruido del sensor táctil puede
+                        // mover la posición unos sub-píxeles incluso en un tap "quieto", pero
+                        // eso nunca cambia la celda calculada, así que nunca dispara el corte).
+                        var didDrag = false
 
                         drag(down.id) { change ->
                             change.consume()
                             val clamped = clampToBoard(change.position)
                             val previous = lastRawPosition ?: clamped
                             val crossed = collectCrossedCells(previous, clamped)
-                            if (crossed.isNotEmpty()) onDrag(crossed)
+
+                            if (crossed.isNotEmpty()) {
+                                if (!didDrag) {
+                                    val safeColor = touchedColor
+                                    if (safeColor != null && cell != null) onNodeTouched(safeColor, cell)
+                                    didDrag = true
+                                }
+                                onDrag(crossed)
+                            }
+
                             dragPosition = clamped
                             lastRawPosition = clamped
                         }
 
                         dragPosition = null
                         lastRawPosition = null
-                        onDragEnd()
+                        if (didDrag) onDragEnd()
                     }
                 }
         ) {
