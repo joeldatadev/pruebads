@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
                                         levelRepository = levelRepository,
                                         progressRepository = progressRepository,
                                         dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
                                         onNextLevel = { proceedOrShowAd { screen = Screen.Campaign(current.levelId + 1) } },
                                         onBackToLevelSelect = { screen = Screen.LevelSelect },
                                         onLevelRestarted = { onRestarted() }
@@ -105,6 +106,7 @@ class MainActivity : ComponentActivity() {
                                         levelRepository = levelRepository,
                                         progressRepository = progressRepository,
                                         dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
                                         infiniteSeed = current.seed,
                                         onNextLevel = {
                                             proceedOrShowAd {
@@ -122,6 +124,7 @@ class MainActivity : ComponentActivity() {
                                         levelRepository = levelRepository,
                                         progressRepository = progressRepository,
                                         dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
                                         dailyEpochDay = LocalDate.now().toEpochDay(),
                                         onNextLevel = { screen = Screen.LevelSelect },
                                         onBackToLevelSelect = { screen = Screen.LevelSelect },
