@@ -36,7 +36,16 @@ class CheckLevelCompleteUseCase {
         if (!allNodesConnected) return false
 
         val nonPlayableCount = board.cellTypes.values.count { it == CellType.Blocked || it == CellType.Void }
-        val requiredCells = board.totalCells() - nonPlayableCount
+        
+        // En ISOMETRIC (3D), el mapa cellTypes contiene todas las coordenadas posibles incluyendo capas Z.
+        // En CARTESIAN (2D), cellTypes solo contiene casillas con propiedades especiales.
+        val totalArea = if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
+            board.cellTypes.size
+        } else {
+            board.totalCells()
+        }
+        
+        val requiredCells = totalArea - nonPlayableCount
         val fullyFilled = board.filledCells() == requiredCells
 
         return fullyFilled

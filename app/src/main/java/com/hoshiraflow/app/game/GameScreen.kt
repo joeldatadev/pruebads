@@ -384,8 +384,6 @@ private fun BoardLayers(
             val layerHeight = cellSizePx * 0.5f
             return com.hoshiraflow.domain.util.IsometricProjection.getHitBlockFace(
                 offset.x, offset.y, board, cellSizePx, cellSizePx, originX, originY, layerHeight
-            ) ?: com.hoshiraflow.domain.util.IsometricProjection.screenToGrid(
-                offset.x, offset.y, cellSizePx, cellSizePx, originX, originY, layerHeight
             )
         }
         val cellWidth = layoutWidth / board.width

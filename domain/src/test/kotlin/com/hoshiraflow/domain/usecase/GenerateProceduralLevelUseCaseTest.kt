@@ -1,17 +1,5 @@
 package com.hoshiraflow.domain.usecase
 
-/**
- * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/usecase/GenerateProceduralLevelUseCaseTest.kt
- *
- * La garantía matemática de que el tablero es 100% solucionable viene de la
- * CONSTRUCCIÓN del algoritmo (el camino Hamiltoniano generado ES la solución,
- * ver comentario en GenerateProceduralLevelUseCase.kt). Estos tests no
- * re-resuelven el puzzle; verifican los invariantes ESTRUCTURALES que
- * cualquier regresión en el algoritmo rompería primero: dimensiones
- * correctas según la curva de dificultad, cantidad de nodos/colores
- * correcta, y - el más importante - que ningún color se quede con una celda
- * duplicada o fuera de rango (símbolo inequívoco de un bug en el generador).
- */
 import com.hoshiraflow.domain.model.PuzzleColor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -21,9 +9,6 @@ class GenerateProceduralLevelUseCaseTest {
 
     private val generate = GenerateProceduralLevelUseCase()
 
-    // Cubre toda la curva de dificultad documentada en difficultyFor(): 1, 10,
-    // 11, 25, 26, 40, 41, 55, 56, 70, 71, 85, 86, 95, 96, y un valor alto
-    // para el tope de dificultad ("modo infinito" avanzado).
     private val indicesCubriendoLaCurva = listOf(1, 10, 11, 25, 26, 40, 41, 55, 56, 70, 71, 85, 86, 95, 96, 500)
 
     @Test
@@ -93,12 +78,6 @@ class GenerateProceduralLevelUseCaseTest {
         val boardA = generate(seed = 1L, index = 10)
         val boardB = generate(seed = 2L, index = 10)
 
-        // No es una garantía matemática absoluta (podría coincidir por azar),
-        // pero con seeds distintos casi siempre difieren - si este test falla
-        // repetidamente, revisar que el seed realmente se esté usando.
         assertTrue(boardA != boardB)
     }
 }
-
-
-

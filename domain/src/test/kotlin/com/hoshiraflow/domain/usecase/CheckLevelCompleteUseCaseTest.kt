@@ -1,8 +1,5 @@
 package com.hoshiraflow.domain.usecase
 
-/**
- * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/usecase/CheckLevelCompleteUseCaseTest.kt
- */
 import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.Node
@@ -89,6 +86,3 @@ class CheckLevelCompleteUseCaseTest {
         assertTrue(checkComplete.isLevelComplete(b))
     }
 }
-
-
-

@@ -2,7 +2,6 @@ package com.hoshiraflow.domain.util
 
 import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
-import kotlin.math.roundToInt
 
 /**
  * Utility for Isometric Projection math.
@@ -88,30 +87,4 @@ object IsometricProjection {
         return collision
     }
 
-    /**
-     * Converts Screen Offset back to nearest Grid (col, row).
-     */
-    fun screenToGrid(
-        x: Float,
-        y: Float,
-        cellWidth: Float,
-        cellHeight: Float,
-        originX: Float = 0f,
-        originY: Float = 0f,
-        layerHeight: Float = 40f
-    ): Cell {
-        val relX = x - originX
-        val relY = y - originY
-        
-        val hFactor = cellHeight * SIN_30
-        val wFactor = cellWidth * COS_30
-
-        val colMinusRow = relX / wFactor
-        val colPlusRow = relY / hFactor
-        
-        val col = (colPlusRow + colMinusRow) / 2f
-        val row = (colPlusRow - colMinusRow) / 2f
-        
-        return Cell(row.roundToInt(), col.roundToInt())
-    }
 }

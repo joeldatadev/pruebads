@@ -10,8 +10,8 @@ import kotlin.random.Random
 class GenerateIsometricLevelUseCase {
 
     private val directions = listOf(
-        Cell(0, 1, 0), Cell(1, 0, 0), Cell(1, -1, 0),
-        Cell(0, -1, 0), Cell(-1, 0, 0), Cell(-1, 1, 0),
+        Cell(0, 1, 0), Cell(0, -1, 0),
+        Cell(1, 0, 0), Cell(-1, 0, 0),
         Cell(0, 0, 1), Cell(0, 0, -1)
     )
 

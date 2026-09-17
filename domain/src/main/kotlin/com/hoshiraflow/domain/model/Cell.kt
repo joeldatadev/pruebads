@@ -18,28 +18,20 @@ data class Cell(
         return (dRow == 1 && dCol == 0) || (dRow == 0 && dCol == 1)
     }
 
-    /** Support for 6-directional adjacency in isometric/hexagonal grids */
+    /** Support for 6-directional orthogonal adjacency in 3D isometric grids */
     fun isIsometricAdjacentTo(other: Cell): Boolean {
-        val dRow = other.row - row
-        val dCol = other.col - col
-        val dZ = other.z - z
+        val dRow = kotlin.math.abs(other.row - row)
+        val dCol = kotlin.math.abs(other.col - col)
+        val dZ = kotlin.math.abs(other.z - z)
         
-        // 6 directions for 3D isometric layout (staggered/axial style)
-        // Including vertical moves if applicable, but usually 6 neighbors in a flat plane
-        // Here we support z transitions if they are 1 step away and row/col are adjacent
-        
+        // 6 orthogonal directions: 
+        // 4 in the current plane (N, S, E, W) 
+        // + 2 vertical (Up, Down)
         return when {
-            // Horizontal planes neighbors
-            dZ == 0 && dRow == 0 && dCol == 1 -> true   // Right
-            dZ == 0 && dRow == 1 && dCol == 0 -> true   // Bottom-Right
-            dZ == 0 && dRow == 1 && dCol == -1 -> true  // Bottom-Left
-            dZ == 0 && dRow == 0 && dCol == -1 -> true  // Left
-            dZ == 0 && dRow == -1 && dCol == 0 -> true  // Top-Left
-            dZ == 0 && dRow == -1 && dCol == 1 -> true  // Top-Right
-            
-            // Volumetric vertical neighbors (up/down)
-            kotlin.math.abs(dZ) == 1 && dRow == 0 && dCol == 0 -> true
-            
+            // Same level neighbors (Orthogonal 2D)
+            dZ == 0 -> (dRow == 1 && dCol == 0) || (dRow == 0 && dCol == 1)
+            // Vertical neighbors (Same (row, col) but adjacent Z)
+            dZ == 1 -> dRow == 0 && dCol == 0
             else -> false
         }
     }

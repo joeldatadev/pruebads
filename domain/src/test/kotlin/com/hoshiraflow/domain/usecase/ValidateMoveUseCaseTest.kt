@@ -1,8 +1,5 @@
 package com.hoshiraflow.domain.usecase
 
-/**
- * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/usecase/ValidateMoveUseCaseTest.kt
- */
 import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.Node
@@ -106,6 +103,3 @@ class ValidateMoveUseCaseTest {
         assertEquals(ValidateMoveUseCase.Result.Invalid, result)
     }
 }
-
-
-

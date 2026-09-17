@@ -1,4 +1,4 @@
-package com.example.zenflow.ui.theme
+package com.hoshiraflow.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -56,5 +56,3 @@ fun ZenFlowTheme(
         content = content
     )
 }
-
-

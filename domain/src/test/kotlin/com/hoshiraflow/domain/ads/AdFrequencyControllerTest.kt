@@ -1,8 +1,5 @@
 package com.hoshiraflow.domain.ads
 
-/**
- * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/ads/AdFrequencyControllerTest.kt
- */
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -64,6 +61,3 @@ class AdFrequencyControllerTest {
         assertTrue(controller.onLevelCompleted(nowMs = 3000))
     }
 }
-
-
-
