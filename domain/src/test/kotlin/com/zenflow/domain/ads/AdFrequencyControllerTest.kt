@@ -1,4 +1,4 @@
-package com.zenflow.domain.ads
+package com.hoshiraflow.domain.ads
 
 /**
  * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/ads/AdFrequencyControllerTest.kt
@@ -64,3 +64,6 @@ class AdFrequencyControllerTest {
         assertTrue(controller.onLevelCompleted(nowMs = 3000))
     }
 }
+
+
+

@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Zen Flow"
+rootProject.name = "Hoshira Flow"
 include(":app")
 include(":domain")
 include(":data")

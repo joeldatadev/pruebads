@@ -13,8 +13,12 @@ kotlinxSerializationJson = "1.7.3"
 kotlinxCoroutines = "1.9.0"
 datastorePreferences = "1.1.1"
 desugarJdkLibs = "2.1.4"
+workRuntimeKtx = "2.9.1"
+composeRuntime = "1.7.5"
 
 [libraries]
+androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "composeRuntime" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

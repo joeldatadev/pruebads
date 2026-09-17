@@ -1,4 +1,4 @@
-package com.zenflow.domain.usecase
+package com.hoshiraflow.domain.usecase
 
 /**
  * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/usecase/GenerateProceduralLevelUseCaseTest.kt
@@ -12,7 +12,7 @@ package com.zenflow.domain.usecase
  * correcta, y - el más importante - que ningún color se quede con una celda
  * duplicada o fuera de rango (símbolo inequívoco de un bug en el generador).
  */
-import com.zenflow.domain.model.PuzzleColor
+import com.hoshiraflow.domain.model.PuzzleColor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -99,3 +99,6 @@ class GenerateProceduralLevelUseCaseTest {
         assertTrue(boardA != boardB)
     }
 }
+
+
+

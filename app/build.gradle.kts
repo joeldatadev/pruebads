@@ -10,14 +10,14 @@ plugins {
 }
 
 android {
-    namespace = "com.zenflow.app"
-    compileSdk = 35
+    namespace = "com.hoshiraflow.app.game"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.zenflow.app"
+        applicationId = "com.hoshiraflow.app.game"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 1
+        targetSdk = 36
+        versionCode = 3
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -34,7 +34,7 @@ android {
             // TEMPORAL: firma con el keystore de debug para poder generar e
             // instalar un APK de release YA, sin esperar al keystore real de
             // Play Store. Bórralo cuando tengas tu keystore de producción.
-            signingConfig = signingConfigs.getByName("debug")
+            //   signingConfig = signingConfigs.getByName("debug")
 
             // Sube automáticamente el mapping file de R8 a Crashlytics, para
             // que los stack traces de crashes en producción salgan legibles
@@ -75,6 +75,8 @@ dependencies {
 
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(libs.androidx.work.runtime.ktx)
 
     implementation("com.google.android.gms:play-services-ads:25.4.0")
 

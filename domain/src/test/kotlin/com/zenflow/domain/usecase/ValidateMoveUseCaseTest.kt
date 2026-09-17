@@ -1,12 +1,12 @@
-package com.zenflow.domain.usecase
+package com.hoshiraflow.domain.usecase
 
 /**
  * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/usecase/ValidateMoveUseCaseTest.kt
  */
-import com.zenflow.domain.model.Board
-import com.zenflow.domain.model.Cell
-import com.zenflow.domain.model.Node
-import com.zenflow.domain.model.PuzzleColor
+import com.hoshiraflow.domain.model.Board
+import com.hoshiraflow.domain.model.Cell
+import com.hoshiraflow.domain.model.Node
+import com.hoshiraflow.domain.model.PuzzleColor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -96,4 +96,16 @@ class ValidateMoveUseCaseTest {
 
         assertEquals(ValidateMoveUseCase.Result.Invalid, result)
     }
+
+    @Test
+    fun `invalido si la celda es de tipo Void`() {
+        val board = testBoard(paths = mapOf(PuzzleColor.RED to listOf(Cell(0, 0))))
+            .copy(cellTypes = mapOf(Cell(0, 1) to com.hoshiraflow.domain.model.CellType.Void))
+        val result = validateMove(board, PuzzleColor.RED, Cell(0, 1))
+
+        assertEquals(ValidateMoveUseCase.Result.Invalid, result)
+    }
 }
+
+
+

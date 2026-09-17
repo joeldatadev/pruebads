@@ -20,14 +20,14 @@
 
 # Mantiene las clases @Serializable del proyecto (LevelDto, NodeDto) y sus
 # serializers generados (el "$$serializer" que genera el plugin).
--keep,includedescriptorclasses class com.zenflow.data.**$$serializer { *; }
--keepclassmembers class com.zenflow.data.** {
+-keep,includedescriptorclasses class com.hoshiraflow.data.**$$serializer { *; }
+-keepclassmembers class com.hoshiraflow.data.** {
     *** Companion;
 }
--keepclasseswithmembers class com.zenflow.data.** {
+-keepclasseswithmembers class com.hoshiraflow.data.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep @kotlinx.serialization.Serializable class com.zenflow.data.** { *; }
+-keep @kotlinx.serialization.Serializable class com.hoshiraflow.data.** { *; }
 
 # =========================================================
 # AdMob / Google Play Services Ads
@@ -49,10 +49,11 @@
 # central del juego, se protegen de renombrado agresivo por seguridad -
 # evita falsos positivos difíciles de rastrear si algo los usa por nombre
 # en el futuro (ej. logging, debugging remoto).
--keep class com.zenflow.domain.model.** { *; }
+-keep class com.hoshiraflow.domain.model.** { *; }
 
 # =========================================================
 # Líneas de stack trace legibles (útil para Crashlytics más adelante)
 # =========================================================
 -keepattributes SourceFile, LineNumberTable
 -renamesourcefileattribute SourceFile
+

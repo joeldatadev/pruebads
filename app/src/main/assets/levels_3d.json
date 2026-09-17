@@ -1,0 +1,46 @@
+[
+  {
+    "id": 1,
+    "rows": 3,
+    "cols": 3,
+    "topology": "ISOMETRIC",
+    "nodes": [
+      { "row": 0, "col": 0, "z": 0, "color": "RED", "pairId": 1 },
+      { "row": 2, "col": 2, "z": 0, "color": "RED", "pairId": 1 },
+      { "row": 0, "col": 2, "z": 0, "color": "BLUE", "pairId": 2 },
+      { "row": 2, "col": 0, "z": 0, "color": "BLUE", "pairId": 2 },
+      { "row": 1, "col": 1, "z": 1, "color": "GREEN", "pairId": 3 },
+      { "row": 1, "col": 0, "z": 0, "color": "GREEN", "pairId": 3 }
+    ]
+  },
+  {
+    "id": 2,
+    "rows": 4,
+    "cols": 4,
+    "topology": "ISOMETRIC",
+    "nodes": [
+      { "row": 0, "col": 0, "z": 0, "color": "PURPLE", "pairId": 1 },
+      { "row": 3, "col": 3, "z": 0, "color": "PURPLE", "pairId": 1 },
+      { "row": 0, "col": 3, "z": 0, "color": "ORANGE", "pairId": 2 },
+      { "row": 3, "col": 0, "z": 0, "color": "ORANGE", "pairId": 2 },
+      { "row": 1, "col": 1, "z": 1, "color": "CYAN", "pairId": 3 },
+      { "row": 2, "col": 2, "z": 1, "color": "CYAN", "pairId": 3 }
+    ]
+  },
+  {
+    "id": 3,
+    "rows": 5,
+    "cols": 5,
+    "topology": "ISOMETRIC",
+    "nodes": [
+      { "row": 0, "col": 0, "z": 0, "color": "RED", "pairId": 1 },
+      { "row": 4, "col": 4, "z": 0, "color": "RED", "pairId": 1 },
+      { "row": 0, "col": 4, "z": 0, "color": "BLUE", "pairId": 2 },
+      { "row": 4, "col": 0, "z": 0, "color": "BLUE", "pairId": 2 },
+      { "row": 1, "col": 1, "z": 1, "color": "YELLOW", "pairId": 3 },
+      { "row": 3, "col": 3, "z": 1, "color": "YELLOW", "pairId": 3 },
+      { "row": 2, "col": 2, "z": 2, "color": "PINK", "pairId": 4 },
+      { "row": 2, "col": 0, "z": 0, "color": "PINK", "pairId": 4 }
+    ]
+  }
+]

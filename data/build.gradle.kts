@@ -8,8 +8,8 @@ plugins {
 }
 
 android {
-    namespace = "com.zenflow.data"
-    compileSdk = 35
+    namespace = "com.hoshiraflow.data"
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -18,6 +18,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 }
 
@@ -34,4 +35,6 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

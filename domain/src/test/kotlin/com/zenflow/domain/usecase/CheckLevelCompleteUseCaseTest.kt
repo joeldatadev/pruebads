@@ -1,12 +1,12 @@
-package com.zenflow.domain.usecase
+package com.hoshiraflow.domain.usecase
 
 /**
  * Ruta destino: domain/src/test/kotlin/com/zenflow/domain/usecase/CheckLevelCompleteUseCaseTest.kt
  */
-import com.zenflow.domain.model.Board
-import com.zenflow.domain.model.Cell
-import com.zenflow.domain.model.Node
-import com.zenflow.domain.model.PuzzleColor
+import com.hoshiraflow.domain.model.Board
+import com.hoshiraflow.domain.model.Cell
+import com.hoshiraflow.domain.model.Node
+import com.hoshiraflow.domain.model.PuzzleColor
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -89,3 +89,6 @@ class CheckLevelCompleteUseCaseTest {
         assertTrue(checkComplete.isLevelComplete(b))
     }
 }
+
+
+
