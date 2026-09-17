@@ -14,5 +14,11 @@ enum class BoardTopology {
      * Nota: Futuras topologías hexagonales (tipo panal) deben usar un nuevo enum (ej. HEX_ISOMETRIC)
      * y su propia fórmula de proyección, no reutilizar la lógica de ISOMETRIC.
      */
-    ISOMETRIC
+    ISOMETRIC,
+
+    /**
+     * Modelo de cubo real con 3 caras visibles (TOP, LEFT, RIGHT).
+     * Cada cara es un grid NxM independiente conectado por aristas.
+     */
+    CUBE
 }

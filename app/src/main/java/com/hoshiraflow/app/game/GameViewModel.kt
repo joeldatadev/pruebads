@@ -11,9 +11,11 @@ import com.hoshiraflow.domain.repository.LevelRepository
 import com.hoshiraflow.domain.repository.ProgressRepository
 import com.hoshiraflow.domain.usecase.CheckLevelCompleteUseCase
 import com.hoshiraflow.domain.usecase.GenerateChallengeLevelUseCase
+import com.hoshiraflow.domain.usecase.GenerateEmptyCubeUseCase
 import com.hoshiraflow.domain.usecase.GenerateMasterLevelUseCase
 import com.hoshiraflow.domain.usecase.GeneratePortalLevelUseCase
 import com.hoshiraflow.domain.usecase.GenerateProceduralLevelUseCase
+import com.hoshiraflow.domain.usecase.GenerateSimpleCubeUseCase
 import com.hoshiraflow.domain.usecase.GenerateSwitchLevelUseCase
 import com.hoshiraflow.domain.usecase.GenerateIsometricLevelUseCase
 import com.hoshiraflow.domain.usecase.GetDailyChallengeSeedUseCase
@@ -44,6 +46,8 @@ class GameViewModel(
     private val generateSwitchLevel = GenerateSwitchLevelUseCase()
     private val generateMasterLevel = GenerateMasterLevelUseCase()
     private val generateIsometricLevel = GenerateIsometricLevelUseCase()
+    private val generateSimpleCube = GenerateSimpleCubeUseCase()
+    private val generateEmptyCube = GenerateEmptyCubeUseCase()
     private val getDailyChallengeSeed = GetDailyChallengeSeedUseCase()
     private val validateMove = ValidateMoveUseCase()
     private val checkComplete = CheckLevelCompleteUseCase()
@@ -213,6 +217,44 @@ class GameViewModel(
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
                 generateIsometricLevel(seed = seed, index = levelId)
+            }.onSuccess { board ->
+                _uiState.value = GameUiState(
+                    isLoading = false,
+                    board = board
+                )
+                startTime = System.currentTimeMillis()
+            }.onFailure { e ->
+                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+            }
+        }
+    }
+
+    fun loadSimpleCube(seed: Long = System.currentTimeMillis()) {
+        currentLevelId = null
+        currentDailyEpochDay = null
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching {
+                generateSimpleCube(seed = seed, index = 1)
+            }.onSuccess { board ->
+                _uiState.value = GameUiState(
+                    isLoading = false,
+                    board = board
+                )
+                startTime = System.currentTimeMillis()
+            }.onFailure { e ->
+                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+            }
+        }
+    }
+
+    fun loadEmptyCube() {
+        currentLevelId = null
+        currentDailyEpochDay = null
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching {
+                generateEmptyCube.invoke(4) // 4x4 faces
             }.onSuccess { board ->
                 _uiState.value = GameUiState(
                     isLoading = false,

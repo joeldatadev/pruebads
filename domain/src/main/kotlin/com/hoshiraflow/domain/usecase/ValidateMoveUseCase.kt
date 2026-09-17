@@ -1,9 +1,11 @@
 package com.hoshiraflow.domain.usecase
 
 import com.hoshiraflow.domain.model.Board
+import com.hoshiraflow.domain.model.BoardTopology
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.CellType
 import com.hoshiraflow.domain.model.PuzzleColor
+import com.hoshiraflow.domain.util.CubeEdgeMap
 
 class ValidateMoveUseCase {
 
@@ -26,10 +28,11 @@ class ValidateMoveUseCase {
             return Result.Retreat(trimmed)
         }
 
-        val isAdjacent = if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-            lastCell.isIsometricAdjacentTo(targetCell)
-        } else {
-            lastCell.isAdjacentTo(targetCell)
+        val isAdjacent = when (board.topology) {
+            BoardTopology.ISOMETRIC -> lastCell.isIsometricAdjacentTo(targetCell)
+            BoardTopology.CUBE -> CubeEdgeMap.areAdjacent(lastCell, targetCell, board.rows)
+                || lastCell.isAdjacentTo(targetCell)
+            else -> lastCell.isAdjacentTo(targetCell)
         }
 
         if (!isAdjacent) return Result.Invalid

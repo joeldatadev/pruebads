@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -64,6 +65,7 @@ import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.CellType
 import com.hoshiraflow.domain.model.PuzzleColor
+import com.hoshiraflow.domain.util.IsometricCubeProjection
 import com.hoshiraflow.domain.repository.DailyChallengeRepository
 import com.hoshiraflow.domain.repository.GameSettings
 import com.hoshiraflow.domain.repository.LevelRepository
@@ -89,6 +91,8 @@ fun GameScreen(
     masterShape: com.hoshiraflow.domain.model.BoardShape? = null,
     isIsometricCampaign: Boolean = false,
     isIsometricInfinite: Boolean = false,
+    isSimpleCube: Boolean = false,
+    isEmptyCube: Boolean = false,
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
     onLevelRestarted: () -> Unit = {},
@@ -111,7 +115,7 @@ fun GameScreen(
         hapticController.enabled = settings.hapticsEnabled
     }
 
-    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isIsometricCampaign, isIsometricInfinite) {
+    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isIsometricCampaign, isIsometricInfinite, isSimpleCube, isEmptyCube) {
         val selectedShape: com.hoshiraflow.domain.model.BoardShape? = when {
             infiniteSeed != null && !isIsometricInfinite -> infiniteShape
             portalSeed != null -> portalShape
@@ -121,6 +125,8 @@ fun GameScreen(
         }
         when {
             dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
+            isEmptyCube -> viewModel.loadEmptyCube()
+            isSimpleCube -> viewModel.loadSimpleCube()
             isIsometricCampaign -> viewModel.loadIsometricCampaignLevel(levelId)
             isIsometricInfinite && infiniteSeed != null -> viewModel.loadIsometricLevel(levelId, infiniteSeed)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed, selectedShape)
@@ -360,6 +366,26 @@ private fun BoardLayers(
 
     fun offsetToCell(offset: Offset): Cell? {
         if (layoutWidth <= 0f || layoutHeight <= 0f) return null
+        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+            val originX = layoutWidth / 2f
+            val originY = layoutHeight / 2.5f
+            val cellSize = cellSizePx
+            
+            // Hit test for the 3 faces
+            for (face in com.hoshiraflow.domain.model.CubeFace.entries) {
+                for (u in 0 until board.rows) {
+                    for (v in 0 until board.cols) {
+                        val poly = IsometricCubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
+                        val xs = poly.map { it.first }.toFloatArray()
+                        val ys = poly.map { it.second }.toFloatArray()
+                        if (isPointInPolygon(offset.x, offset.y, xs, ys)) {
+                            return Cell(u, v, face.ordinal)
+                        }
+                    }
+                }
+            }
+            return null
+        }
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
             val originX = layoutWidth / 2f
             val originY = layoutHeight / 4f
@@ -378,6 +404,9 @@ private fun BoardLayers(
 
     fun offsetToCellClamped(offset: Offset): Cell? {
         if (layoutWidth <= 0f || layoutHeight <= 0f) return null
+        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+            return offsetToCell(offset) // No clamping for cube yet
+        }
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
             val originX = layoutWidth / 2f
             val originY = layoutHeight / 4f
@@ -550,6 +579,33 @@ private fun DrawScope.drawGrid(
     val blockedBgColor = Color(0xFF1E293B)
     val voidBgColor = Color(0xFF0F172A) // Base dark background for non-playable Void cells
 
+    if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+        val originX = layoutWidth / 2f
+        val originY = layoutHeight / 2.5f
+        
+        // Draw 3 faces
+        com.hoshiraflow.domain.model.CubeFace.entries.forEach { face ->
+            for (u in 0 until board.rows) {
+                for (v in 0 until board.cols) {
+                    val poly = IsometricCubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
+                    val path = Path().apply {
+                        poly.forEachIndexed { i, p ->
+                            if (i == 0) moveTo(p.first, p.second) else lineTo(p.first, p.second)
+                        }
+                        close()
+                    }
+                    
+                    // Fill cell
+                    drawPath(path, color = Color(0xFF1E293B).copy(alpha = 0.6f))
+                    
+                    // Borders
+                    drawPath(path, color = gridColor, style = Stroke(width = 2f))
+                }
+            }
+        }
+        return
+    }
+
     if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
         val originX = layoutWidth / 2f
         val originY = layoutHeight / 4f
@@ -685,6 +741,22 @@ private fun DrawScope.drawGrid(
                         radius = cellSize * 0.15f,
                         center = center
                     )
+
+                    // Destellos visuales si está activado
+                    if (isOccupied) {
+                        for (i in 0 until 4) {
+                            val angle = (i * 90) * (Math.PI / 180).toFloat()
+                            val offset = Offset(
+                                (kotlin.math.cos(angle) * cellSize * 0.25f).toFloat(),
+                                (kotlin.math.sin(angle) * cellSize * 0.25f).toFloat()
+                            )
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.6f),
+                                radius = 1.5f,
+                                center = center + offset
+                            )
+                        }
+                    }
                 }
                 is CellType.Switch -> {
                     val targetColor = type.targetColor.toComposeColor()
@@ -726,6 +798,15 @@ private fun DrawScope.drawGrid(
                             end = end,
                             strokeWidth = if (isOccupied) 5f else 4f,
                             cap = StrokeCap.Round
+                        )
+                    }
+
+                    // Sparkle effect for Switch
+                    if (isOccupied) {
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.5f),
+                            radius = cellSize * 0.04f,
+                            center = center + Offset(cellSize * 0.15f, -cellSize * 0.15f)
                         )
                     }
                 }
@@ -873,8 +954,17 @@ private fun DrawScope.drawPaths(
             val reachY = cellHeight * 0.5f
             
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-                // For isometric drag, we just point towards the finger
-                currentPath.lineTo(dragPosition.x, dragPosition.y)
+                val maxReach = kotlin.math.min(cellWidth, cellHeight) * 0.6f
+                val dist = kotlin.math.hypot(dx, dy)
+                val clampedEnd = if (dist > maxReach) {
+                    Offset(
+                        lastCenter.x + dx / dist * maxReach,
+                        lastCenter.y + dy / dist * maxReach
+                    )
+                } else {
+                    dragPosition
+                }
+                currentPath.lineTo(clampedEnd.x, clampedEnd.y)
             } else {
                 val snappedEnd = if (kotlin.math.abs(dx) / cellWidth >= kotlin.math.abs(dy) / cellHeight) {
                     Offset(lastCenter.x + dx.coerceIn(-reachX, reachX), lastCenter.y)
@@ -985,6 +1075,13 @@ private fun cellCenter(
     layoutWidth: Float, 
     layoutHeight: Float
 ): Offset {
+    if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+        val originX = layoutWidth / 2f
+        val originY = layoutHeight / 2.5f
+        val face = com.hoshiraflow.domain.model.CubeFace.entries[cell.z]
+        val pos = IsometricCubeProjection.cellToScreen(face, cell.row, cell.col, cellSize, originX, originY)
+        return Offset(pos.first, pos.second)
+    }
     if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
         val originX = layoutWidth / 2f
         val originY = layoutHeight / 4f
@@ -996,6 +1093,20 @@ private fun cellCenter(
         return Offset(screenPos.first, screenPos.second)
     }
     return Offset(cell.col * cellWidth + cellWidth / 2f, cell.row * cellHeight + cellHeight / 2f)
+}
+
+private fun isPointInPolygon(px: Float, py: Float, polyX: FloatArray, polyY: FloatArray): Boolean {
+    var collision = false
+    var next: Int
+    for (current in polyX.indices) {
+        next = current + 1
+        if (next == polyX.size) next = 0
+        if (((polyY[current] > py) != (polyY[next] > py)) && 
+            (px < (polyX[next] - polyX[current]) * (py - polyY[current]) / (polyY[next] - polyY[current]) + polyX[current])) {
+            collision = !collision
+        }
+    }
+    return collision
 }
 
 

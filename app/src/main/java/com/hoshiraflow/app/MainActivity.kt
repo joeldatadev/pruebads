@@ -54,6 +54,8 @@ private sealed class Screen {
     data class Master(val index: Int, val seed: Long, val shape: com.hoshiraflow.domain.model.BoardShape? = null) : Screen()
     data class IsometricCampaign(val levelId: Int) : Screen()
     data class IsometricInfinite(val index: Int, val seed: Long) : Screen()
+    object SimpleCube : Screen()
+    object EmptyCube : Screen()
     object Daily : Screen()
     object Settings : Screen()
 }
@@ -247,6 +249,36 @@ class MainActivity : ComponentActivity() {
                                         onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
+                                Screen.SimpleCube -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    GameScreen(
+                                        levelId = 1,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
+                                        isSimpleCube = true,
+                                        onNextLevel = { screen = Screen.MainMenu },
+                                        onBackToLevelSelect = { screen = Screen.MainMenu },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                Screen.EmptyCube -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    GameScreen(
+                                        levelId = 1,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
+                                        isEmptyCube = true,
+                                        onNextLevel = { screen = Screen.MainMenu },
+                                        onBackToLevelSelect = { screen = Screen.MainMenu },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
+                                    )
+                                }
                                 Screen.Daily -> {
                                     BackHandler { screen = Screen.MainMenu }
                                     GameScreen(
@@ -301,7 +333,9 @@ class MainActivity : ComponentActivity() {
                                         screen = Screen.Master(index = 1, seed = System.currentTimeMillis(), shape = shape)
                                     },
                                     onIsometricCampaignSelected = { screen = Screen.IsometricCampaign(1) },
-                                    onIsometricInfiniteSelected = { screen = Screen.IsometricInfinite(1, System.currentTimeMillis()) }
+                                    onIsometricInfiniteSelected = { screen = Screen.IsometricInfinite(1, System.currentTimeMillis()) },
+                                    onSimpleCubeSelected = { screen = Screen.SimpleCube },
+                                    onEmptyCubeSelected = { screen = Screen.EmptyCube }
                                 )
                             }
                         }

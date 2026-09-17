@@ -12,14 +12,14 @@ import androidx.compose.runtime.Immutable
 data class Board(
     val rows: Int = 5,
     val cols: Int = 5,
+    val width: Int = 5,
+    val height: Int = 5,
     val nodes: List<Node> = emptyList(),
     // paths: mapa color -> lista ordenada de celdas que forman la línea actual
     val paths: Map<PuzzleColor, List<Cell>> = emptyMap(),
     val cellTypes: Map<Cell, CellType> = emptyMap(),
     val topology: BoardTopology = BoardTopology.CARTESIAN
 ) {
-    val width: Int get() = cols
-    val height: Int get() = rows
 
     fun nodesOf(color: PuzzleColor): List<Node> = nodes.filter { it.color == color }
 

@@ -76,7 +76,9 @@ fun MainMenuScreen(
     onMasterModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onInfiniteModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onIsometricCampaignSelected: () -> Unit = {},
-    onIsometricInfiniteSelected: () -> Unit = {}
+    onIsometricInfiniteSelected: () -> Unit = {},
+    onSimpleCubeSelected: () -> Unit = {},
+    onEmptyCubeSelected: () -> Unit = {}
 ) {
     val viewModel: LevelSelectViewModel = viewModel(
         factory = LevelSelectViewModelFactory(levelRepository, progressRepository, dailyChallengeRepository)
@@ -289,6 +291,36 @@ fun MainMenuScreen(
                 onClick = onIsometricInfiniteSelected
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "🧪 Herramientas de Diagnóstico",
+            color = Color(0xFFFACC15),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.Start).padding(bottom = 12.dp)
+        )
+
+        SmallMenuCard(
+            title = "Cubo 2x2x2 Minimal",
+            modifier = Modifier.fillMaxWidth(),
+            subtitle = "Validar proyección, adyacencia y touch",
+            icon = Icons.Filled.BugReport,
+            gradient = Brush.linearGradient(colors = listOf(Color(0xFF4B5563), Color(0xFF1F2937))),
+            onClick = onSimpleCubeSelected
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SmallMenuCard(
+            title = "Cubo Real (3 Caras)",
+            modifier = Modifier.fillMaxWidth(),
+            subtitle = "Validación de geometría 3D real",
+            icon = Icons.Filled.SquareFoot,
+            gradient = Brush.linearGradient(colors = listOf(Color(0xFF6366F1), Color(0xFF4338CA))),
+            onClick = onEmptyCubeSelected
+        )
 
         Spacer(modifier = Modifier.height(30.dp))
 
