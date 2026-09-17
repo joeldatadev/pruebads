@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.Flow
 interface ProgressRepository {
     fun observeCompletedLevels(): Flow<Set<Int>>
     suspend fun markLevelCompleted(levelId: Int)
+    fun observeCompletedCubeLevels(): kotlinx.coroutines.flow.Flow<Set<Int>>
+    suspend fun markCubeLevelCompleted(levelId: Int)
 }
 
 

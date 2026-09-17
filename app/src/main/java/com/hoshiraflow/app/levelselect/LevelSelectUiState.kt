@@ -14,6 +14,8 @@ data class LevelSelectUiState(
     val dailyChallengeState: DailyChallengeState = DailyChallengeState(),
     val isDailyChallengeCompletedToday: Boolean = false,
     val dailyChallengeCountdown: String = "",
+    val completedCubeLevels: Set<Int> = emptySet(),
+    val totalCubeLevels: Int = 0,
     val errorMessage: String? = null
 )
 

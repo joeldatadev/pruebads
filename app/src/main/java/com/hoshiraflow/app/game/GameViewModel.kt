@@ -94,6 +94,25 @@ class GameViewModel(
         }
     }
 
+    fun loadCubeLevel(levelId: Int) {
+        currentLevelId = levelId
+        currentDailyEpochDay = null
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching { levelRepository.getCubeLevel(levelId) }
+                .onSuccess { board ->
+                    _uiState.value = GameUiState(
+                        isLoading = false,
+                        board = board
+                    )
+                    startTime = System.currentTimeMillis()
+                }
+                .onFailure { e ->
+                    _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+                }
+        }
+    }
+
     fun loadDailyChallenge(epochDay: Long) {
         currentLevelId = null
         currentDailyEpochDay = epochDay
@@ -402,7 +421,13 @@ class GameViewModel(
             )
             viewModelScope.launch {
                 _events.emit(GameEvent.LevelCompleted)
-                currentLevelId?.let { progressRepository.markLevelCompleted(it) }
+                currentLevelId?.let { id ->
+                    if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+                        progressRepository.markCubeLevelCompleted(id)
+                    } else {
+                        progressRepository.markLevelCompleted(id)
+                    }
+                }
                 currentDailyEpochDay?.let { dailyChallengeRepository.markCompleted(it) }
             }
         } else {

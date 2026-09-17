@@ -69,7 +69,7 @@ fun MainMenuScreen(
     onSwitchModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onMasterModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onInfiniteModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
-
+    onCubeModeSelected: () -> Unit = {},
     onSimpleCubeSelected: () -> Unit = {},
     onEmptyCubeSelected: () -> Unit = {}
 ) {
@@ -251,6 +251,18 @@ fun MainMenuScreen(
                 Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Card 7: Desafío del Cubo 3D (New Mode)
+        PremiumMenuCard(
+            title = "Desafío del Cubo 3D",
+            subtitle = "${uiState.completedCubeLevels.size} / ${uiState.totalCubeLevels} Niveles superados",
+            icon = Icons.Filled.ViewInAr,
+            gradient = Brush.linearGradient(colors = listOf(Color(0xFF10B981), Color(0xFF06B6D4))),
+            onClick = onCubeModeSelected,
+            progress = if (uiState.totalCubeLevels > 0) uiState.completedCubeLevels.size.toFloat() / uiState.totalCubeLevels else 0f
+        )
 
 
 

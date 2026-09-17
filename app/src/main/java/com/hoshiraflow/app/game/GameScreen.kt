@@ -91,6 +91,7 @@ fun GameScreen(
     masterShape: com.hoshiraflow.domain.model.BoardShape? = null,
     isIsometricCampaign: Boolean = false,
     isIsometricInfinite: Boolean = false,
+    isCubeCampaign: Boolean = false,
     isSimpleCube: Boolean = false,
     isEmptyCube: Boolean = false,
     onNextLevel: () -> Unit = {},
@@ -115,7 +116,7 @@ fun GameScreen(
         hapticController.enabled = settings.hapticsEnabled
     }
 
-    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isIsometricCampaign, isIsometricInfinite, isSimpleCube, isEmptyCube) {
+    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isIsometricCampaign, isIsometricInfinite, isCubeCampaign, isSimpleCube, isEmptyCube) {
         val selectedShape: com.hoshiraflow.domain.model.BoardShape? = when {
             infiniteSeed != null && !isIsometricInfinite -> infiniteShape
             portalSeed != null -> portalShape
@@ -127,6 +128,7 @@ fun GameScreen(
             dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
             isEmptyCube -> viewModel.loadEmptyCube()
             isSimpleCube -> viewModel.loadSimpleCube()
+            isCubeCampaign -> viewModel.loadCubeLevel(levelId)
             isIsometricCampaign -> viewModel.loadIsometricCampaignLevel(levelId)
             isIsometricInfinite && infiniteSeed != null -> viewModel.loadIsometricLevel(levelId, infiniteSeed)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed, selectedShape)
@@ -1047,29 +1049,20 @@ private fun DrawScope.drawPaths(
             val dx = dragPosition!!.x - lastCenter.x
             val dy = dragPosition.y - lastCenter.y
 
-            val reachX = cellWidth * 0.5f
-            val reachY = cellHeight * 0.5f
-
-            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-                val maxReach = kotlin.math.min(cellWidth, cellHeight) * 0.6f
-                val dist = kotlin.math.hypot(dx, dy)
-                val clampedEnd = if (dist > maxReach) {
-                    Offset(
-                        lastCenter.x + dx / dist * maxReach,
-                        lastCenter.y + dy / dist * maxReach
-                    )
-                } else {
-                    dragPosition
-                }
-                currentPath.lineTo(clampedEnd.x, clampedEnd.y)
+            val maxReach = cellSize * 0.8f
+            val dist = kotlin.math.hypot(dx, dy)
+            
+            // En el Cubo e Isometric, no queremos "snapping" a 90 grados (plano)
+            // Queremos que la línea siga el vector real del dedo para sentir la profundidad
+            val clampedEnd = if (dist > maxReach) {
+                Offset(
+                    lastCenter.x + dx / dist * maxReach,
+                    lastCenter.y + dy / dist * maxReach
+                )
             } else {
-                val snappedEnd = if (kotlin.math.abs(dx) / cellWidth >= kotlin.math.abs(dy) / cellHeight) {
-                    Offset(lastCenter.x + dx.coerceIn(-reachX, reachX), lastCenter.y)
-                } else {
-                    Offset(lastCenter.x, lastCenter.y + dy.coerceIn(-reachY, reachY))
-                }
-                currentPath.lineTo(snappedEnd.x, snappedEnd.y)
+                dragPosition
             }
+            currentPath.lineTo(clampedEnd!!.x, clampedEnd.y)
             pathHasPoints = true
         }
 

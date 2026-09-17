@@ -15,16 +15,29 @@ private val Context.progressDataStore by preferencesDataStore(name = "hoshiraflo
 class ProgressDataStore(private val context: Context) {
 
     private val completedLevelsKey = stringSetPreferencesKey("completed_levels")
+    private val completedCubeLevelsKey = stringSetPreferencesKey("completed_cube_levels")
 
     fun observeCompletedLevels(): Flow<Set<Int>> =
         context.progressDataStore.data.map { prefs ->
             prefs[completedLevelsKey]?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
         }
 
+    fun observeCompletedCubeLevels(): Flow<Set<Int>> =
+        context.progressDataStore.data.map { prefs ->
+            prefs[completedCubeLevelsKey]?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
+        }
+
     suspend fun addCompletedLevel(levelId: Int) {
         context.progressDataStore.edit { prefs ->
             val current = prefs[completedLevelsKey] ?: emptySet()
             prefs[completedLevelsKey] = current + levelId.toString()
+        }
+    }
+
+    suspend fun addCompletedCubeLevel(levelId: Int) {
+        context.progressDataStore.edit { prefs ->
+            val current = prefs[completedCubeLevelsKey] ?: emptySet()
+            prefs[completedCubeLevelsKey] = current + levelId.toString()
         }
     }
 }

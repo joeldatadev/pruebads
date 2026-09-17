@@ -33,8 +33,18 @@ class LevelSelectViewModel(
 
     private fun loadLevels() {
         viewModelScope.launch {
-            runCatching { levelRepository.getTotalLevels() }
-                .onSuccess { total -> _uiState.value = _uiState.value.copy(isLoading = false, totalLevels = total) }
+            runCatching { 
+                val campaignTotal = levelRepository.getTotalLevels()
+                val cubeTotal = levelRepository.getTotalCubeLevels()
+                Pair(campaignTotal, cubeTotal)
+            }
+                .onSuccess { (total, cubeTotal) -> 
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false, 
+                        totalLevels = total,
+                        totalCubeLevels = cubeTotal
+                    ) 
+                }
                 .onFailure { e -> _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = e.message) }
         }
     }
@@ -43,6 +53,11 @@ class LevelSelectViewModel(
         viewModelScope.launch {
             progressRepository.observeCompletedLevels().collect { completed ->
                 _uiState.value = _uiState.value.copy(completedLevels = completed)
+            }
+        }
+        viewModelScope.launch {
+            progressRepository.observeCompletedCubeLevels().collect { completed ->
+                _uiState.value = _uiState.value.copy(completedCubeLevels = completed)
             }
         }
     }

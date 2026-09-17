@@ -39,10 +39,10 @@ class CheckLevelCompleteUseCase {
         
         // En ISOMETRIC (3D), el mapa cellTypes contiene todas las coordenadas posibles incluyendo capas Z.
         // En CARTESIAN (2D), cellTypes solo contiene casillas con propiedades especiales.
-        val totalArea = if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-            board.cellTypes.size
-        } else {
-            board.totalCells()
+        val totalArea = when (board.topology) {
+            com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC -> board.cellTypes.size
+            com.hoshiraflow.domain.model.BoardTopology.CUBE -> board.cellTypes.size
+            else -> board.totalCells()
         }
         
         val requiredCells = totalArea - nonPlayableCount

@@ -54,6 +54,8 @@ private sealed class Screen {
     data class Master(val index: Int, val seed: Long, val shape: com.hoshiraflow.domain.model.BoardShape? = null) : Screen()
     data class IsometricCampaign(val levelId: Int) : Screen()
     data class IsometricInfinite(val index: Int, val seed: Long) : Screen()
+    object CubeLevelSelection : Screen()
+    data class CubeCampaign(val levelId: Int) : Screen()
     object SimpleCube : Screen()
     object EmptyCube : Screen()
     object Daily : Screen()
@@ -264,6 +266,31 @@ class MainActivity : ComponentActivity() {
                                         onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
+                                Screen.CubeLevelSelection -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    com.hoshiraflow.app.levelselect.CubeLevelSelectionScreen(
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        onLevelSelected = { levelId -> screen = Screen.CubeCampaign(levelId) },
+                                        onBack = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                is Screen.CubeCampaign -> {
+                                    BackHandler { screen = Screen.CubeLevelSelection }
+                                    GameScreen(
+                                        levelId = current.levelId,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
+                                        isCubeCampaign = true,
+                                        onNextLevel = { screen = Screen.CubeCampaign(current.levelId + 1) },
+                                        onBackToLevelSelect = { screen = Screen.CubeLevelSelection },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
+                                    )
+                                }
                                 Screen.EmptyCube -> {
                                     BackHandler { screen = Screen.MainMenu }
                                     GameScreen(
@@ -332,7 +359,7 @@ class MainActivity : ComponentActivity() {
                                     onMasterModeSelected = { shape ->
                                         screen = Screen.Master(index = 1, seed = System.currentTimeMillis(), shape = shape)
                                     },
-
+                                    onCubeModeSelected = { screen = Screen.CubeLevelSelection },
                                     onSimpleCubeSelected = { screen = Screen.SimpleCube },
                                     onEmptyCubeSelected = { screen = Screen.EmptyCube }
                                 )
