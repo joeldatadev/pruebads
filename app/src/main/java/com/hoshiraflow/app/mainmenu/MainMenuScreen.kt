@@ -55,13 +55,7 @@ private val MasterGradient = Brush.linearGradient(
     colors = listOf(Color(0xFFFFD700), Color(0xFF990000))
 )
 
-private val IsometricCampaignGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF10B981), Color(0xFF059669))
-)
 
-private val IsometricInfiniteGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF34D399), Color(0xFF059669))
-)
 
 @Composable
 fun MainMenuScreen(
@@ -75,8 +69,7 @@ fun MainMenuScreen(
     onSwitchModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onMasterModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onInfiniteModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
-    onIsometricCampaignSelected: () -> Unit = {},
-    onIsometricInfiniteSelected: () -> Unit = {},
+
     onSimpleCubeSelected: () -> Unit = {},
     onEmptyCubeSelected: () -> Unit = {}
 ) {
@@ -259,38 +252,7 @@ fun MainMenuScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
 
-        // 3D Isometric Modes Section
-        Text(
-            text = "🧊 Dimensiones Superiores (3D)",
-            color = Color(0xFF10B981),
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.Start).padding(bottom = 12.dp)
-        )
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            SmallMenuCard(
-                title = "Campaña 3D",
-                modifier = Modifier.weight(1f),
-                subtitle = "Nivel 1 / 100",
-                icon = Icons.Filled.Icecream, // Proxy for cube
-                gradient = IsometricCampaignGradient,
-                onClick = onIsometricCampaignSelected
-            )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-
-            SmallMenuCard(
-                title = "Infinito 3D",
-                modifier = Modifier.weight(1f),
-                subtitle = "Niveles Volumétricos Ilimitados",
-                icon = Icons.Filled.AllInclusive,
-                gradient = IsometricInfiniteGradient,
-                onClick = onIsometricInfiniteSelected
-            )
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

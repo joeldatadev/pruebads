@@ -646,8 +646,16 @@ private fun DrawScope.drawGrid(
         val originX = cubeOriginX
         val originY = cubeOriginY
 
-        // Draw 3 faces
+        // Caras con degradados suaves para dar profundidad volumétrica
+        val faceGradients = mapOf(
+            com.hoshiraflow.domain.model.CubeFace.TOP to Color(0xFF2E3B4E),   // Luz desde arriba
+            com.hoshiraflow.domain.model.CubeFace.LEFT to Color(0xFF1A222F),  // Sombra lateral
+            com.hoshiraflow.domain.model.CubeFace.RIGHT to Color(0xFF232D3D) // Penumbra lateral
+        )
+
         com.hoshiraflow.domain.model.CubeFace.entries.forEach { face ->
+            val faceColor = faceGradients[face] ?: Color(0xFF1E293B)
+            
             for (u in 0 until board.rows) {
                 for (v in 0 until board.cols) {
                     val poly = IsometricCubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
@@ -658,11 +666,15 @@ private fun DrawScope.drawGrid(
                         close()
                     }
 
-                    // Fill cell
-                    drawPath(path, color = Color(0xFF1E293B).copy(alpha = 0.6f))
+                    // Fondo de celda con un sutil borde interno
+                    drawPath(path, color = faceColor.copy(alpha = 0.9f))
 
-                    // Borders
-                    drawPath(path, color = gridColor, style = Stroke(width = 2f))
+                    // Bordes de rejilla marcados para una definición premium del cubo
+                    drawPath(
+                        path, 
+                        color = Color.White.copy(alpha = 0.2f), 
+                        style = Stroke(width = 1.8f)
+                    )
                 }
             }
         }
@@ -987,6 +999,18 @@ private fun DrawScope.drawPaths(
             }
 
             val center = cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+            
+            // FIX para cruce de aristas en Cubo:
+            // Cuando saltamos de una cara a otra, el lineTo(center.x, center.y) 
+            // crea una línea recta que ignora la geometría del cubo.
+            // Dibujamos un punto intermedio en la arista compartida para que la línea se "doble".
+            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE && !isPortalJump) {
+                val edgePoint = calculateCubeEdgeMidPoint(prevCell, cell, cellSize, cubeOriginX, cubeOriginY)
+                if (edgePoint != null) {
+                    currentPath.lineTo(edgePoint.x, edgePoint.y)
+                }
+            }
+
             currentPath.lineTo(center.x, center.y)
             pathHasPoints = true
 
@@ -1182,4 +1206,37 @@ private fun isPointInPolygon(px: Float, py: Float, polyX: FloatArray, polyY: Flo
         }
     }
     return collision
+}
+
+private fun calculateCubeEdgeMidPoint(
+    from: Cell,
+    to: Cell,
+    cellSize: Float,
+    originX: Float,
+    originY: Float
+): Offset? {
+    val fFace = com.hoshiraflow.domain.model.CubeFace.entries[from.z]
+    val tFace = com.hoshiraflow.domain.model.CubeFace.entries[to.z]
+
+    val fPoly = IsometricCubeProjection.getCellPolygon(fFace, from.row, from.col, cellSize, originX, originY)
+    val tPoly = IsometricCubeProjection.getCellPolygon(tFace, to.row, to.col, cellSize, originX, originY)
+
+    // Buscamos los 2 puntos en común que comparten ambos polígonos
+    val sharedPoints = mutableListOf<Pair<Float, Float>>()
+    for (fp in fPoly) {
+        for (tp in tPoly) {
+            val dx = fp.first - tp.first
+            val dy = fp.second - tp.second
+            if (kotlin.math.hypot(dx, dy) < 1.0f) { // Tolerancia por flotantes
+                sharedPoints.add(fp)
+            }
+        }
+    }
+
+    if (sharedPoints.size >= 2) {
+        val mx = (sharedPoints[0].first + sharedPoints[1].first) / 2f
+        val my = (sharedPoints[0].second + sharedPoints[1].second) / 2f
+        return Offset(mx, my)
+    }
+    return null
 }

@@ -332,8 +332,7 @@ class MainActivity : ComponentActivity() {
                                     onMasterModeSelected = { shape ->
                                         screen = Screen.Master(index = 1, seed = System.currentTimeMillis(), shape = shape)
                                     },
-                                    onIsometricCampaignSelected = { screen = Screen.IsometricCampaign(1) },
-                                    onIsometricInfiniteSelected = { screen = Screen.IsometricInfinite(1, System.currentTimeMillis()) },
+
                                     onSimpleCubeSelected = { screen = Screen.SimpleCube },
                                     onEmptyCubeSelected = { screen = Screen.EmptyCube }
                                 )
