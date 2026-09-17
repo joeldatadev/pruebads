@@ -11,44 +11,37 @@ class GenerateEmptyCubeUseCase {
     operator fun invoke(n: Int): Board {
         val cellTypes = mutableMapOf<Cell, CellType>()
         val nodes = mutableListOf<Node>()
-        
-        // Generamos celdas para las 3 caras (z=0:TOP, z=1:LEFT, z=2:RIGHT)
+
         for (faceIdx in 0..2) {
             for (u in 0 until n) {
                 for (v in 0 until n) {
-                    val cell = Cell(u, v, faceIdx)
-                    cellTypes[cell] = CellType.Empty
+                    cellTypes[Cell(u, v, faceIdx)] = CellType.Empty
                 }
             }
         }
 
-        // --- PINTADO DE CELDAS DE PRUEBA EN ARISTAS ---
-        
-        // Par A: Magenta (PURPLE) -> TOP-LEFT
-        // Celda en TOP (u=n-1, v=1) y su vecina en LEFT
-        val cellA1 = Cell(n - 1, 1, 0)
-        val faceA2 = CubeEdgeMap.crossEdge(CubeFace.TOP, n - 1, 1, n)!!
-        val cellA2 = Cell(faceA2.u, faceA2.v, faceA2.face.ordinal)
+        fun crossOrThrow(face: CubeFace, u: Int, v: Int): CubeEdgeMap.Neighbor =
+            CubeEdgeMap.crossEdges(face, u, v, n).firstOrNull()
+                ?: error("Celda $face($u,$v) no tiene arista compartida con otra cara para n=$n")
+
+        // Par A: Morado -> TOP-LEFT, sobre la arista real TOP(u,0) <-> LEFT(u,0)
+        val cellA1 = Cell(1, 0, CubeFace.TOP.ordinal)
+        val neighborA = crossOrThrow(CubeFace.TOP, 1, 0)
+        val cellA2 = Cell(neighborA.u, neighborA.v, neighborA.face.ordinal)
         nodes.add(Node(cellA1, PuzzleColor.PURPLE, 1))
         nodes.add(Node(cellA2, PuzzleColor.PURPLE, 1))
 
-        // Par B: Cian (CYAN) -> TOP-RIGHT
-        // Celda en TOP (u=0, v=1) y su vecina en RIGHT
-        val cellB1 = Cell(0, 1, 0)
-        val faceB2 = CubeEdgeMap.crossEdge(CubeFace.TOP, 0, 1, n)!!
-        val cellB2 = Cell(faceB2.u, faceB2.v, faceB2.face.ordinal)
+        // Par B: Cian -> TOP-RIGHT, sobre la arista real TOP(0,v) <-> RIGHT(v,0)
+        val cellB1 = Cell(0, 1, CubeFace.TOP.ordinal)
+        val neighborB = crossOrThrow(CubeFace.TOP, 0, 1)
+        val cellB2 = Cell(neighborB.u, neighborB.v, neighborB.face.ordinal)
         nodes.add(Node(cellB1, PuzzleColor.CYAN, 2))
         nodes.add(Node(cellB2, PuzzleColor.CYAN, 2))
 
-        // Par C: Amarillo (YELLOW) -> LEFT-RIGHT
-        // Celda en LEFT (u=0, v=1) y su vecina en RIGHT, cruzando la ÚNICA arista
-        // real que comparten LEFT y RIGHT (el borde vertical central del hexágono,
-        // u=0). Antes se usaba (u=1, v=n-1), apoyado en una segunda arista "base"
-        // que en realidad no existe geométricamente (ver CubeEdgeMap.kt) -- ese
-        // punto no tenía vecino en ninguna cara, por eso crossEdge()!! explotaba.
-        val cellC1 = Cell(0, 1, 1)
-        val faceC2 = CubeEdgeMap.crossEdge(CubeFace.LEFT, 0, 1, n)!!
-        val cellC2 = Cell(faceC2.u, faceC2.v, faceC2.face.ordinal)
+        // Par C: Amarillo -> LEFT-RIGHT, sobre la arista real LEFT(0,v) <-> RIGHT(0,v)
+        val cellC1 = Cell(0, 1, CubeFace.LEFT.ordinal)
+        val neighborC = crossOrThrow(CubeFace.LEFT, 0, 1)
+        val cellC2 = Cell(neighborC.u, neighborC.v, neighborC.face.ordinal)
         nodes.add(Node(cellC1, PuzzleColor.YELLOW, 3))
         nodes.add(Node(cellC2, PuzzleColor.YELLOW, 3))
 
