@@ -40,10 +40,14 @@ class GenerateEmptyCubeUseCase {
         nodes.add(Node(cellB1, PuzzleColor.CYAN, 2))
         nodes.add(Node(cellB2, PuzzleColor.CYAN, 2))
 
-        // Par C: Amarillo (YELLOW) -> LEFT-RIGHT (BASE)
-        // Celda en LEFT (u=1, v=n-1) y su vecina en RIGHT
-        val cellC1 = Cell(1, n - 1, 1)
-        val faceC2 = CubeEdgeMap.crossEdge(CubeFace.LEFT, 1, n - 1, n)!!
+        // Par C: Amarillo (YELLOW) -> LEFT-RIGHT
+        // Celda en LEFT (u=0, v=1) y su vecina en RIGHT, cruzando la ÚNICA arista
+        // real que comparten LEFT y RIGHT (el borde vertical central del hexágono,
+        // u=0). Antes se usaba (u=1, v=n-1), apoyado en una segunda arista "base"
+        // que en realidad no existe geométricamente (ver CubeEdgeMap.kt) -- ese
+        // punto no tenía vecino en ninguna cara, por eso crossEdge()!! explotaba.
+        val cellC1 = Cell(0, 1, 1)
+        val faceC2 = CubeEdgeMap.crossEdge(CubeFace.LEFT, 0, 1, n)!!
         val cellC2 = Cell(faceC2.u, faceC2.v, faceC2.face.ordinal)
         nodes.add(Node(cellC1, PuzzleColor.YELLOW, 3))
         nodes.add(Node(cellC2, PuzzleColor.YELLOW, 3))

@@ -107,7 +107,7 @@ fun GameScreen(
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
     val hapticController = remember { HapticController(context) }
-    
+
     var isPaused by remember { mutableStateOf(false) }
 
     val settings by settingsRepository.observeSettings().collectAsState(initial = GameSettings())
@@ -209,7 +209,7 @@ fun GameScreen(
                             } else {
                                 Text("Nivel $levelId ", color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
                             }
-                            
+
                             Box(
                                 modifier = Modifier
                                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
@@ -259,31 +259,31 @@ fun GameScreen(
                                 val color = viewModel.uiState.value.activeColor
                                 val beforeBoard = viewModel.uiState.value.board
                                 val beforeLen = color?.let { beforeBoard?.paths?.get(it)?.size } ?: 0
-                                
+
                                 viewModel.onDragBatch(cells)
-                                
+
                                 val afterBoard = viewModel.uiState.value.board
                                 val afterLen = color?.let { afterBoard?.paths?.get(it)?.size } ?: 0
-                                
+
                                 if (afterLen > beforeLen && color != null && beforeBoard != null && afterBoard != null) {
                                     val newCells = afterBoard.paths[color]!!.takeLast(afterLen - beforeLen)
-                                    
+
                                     // Detectar Portales e Interruptores para Haptics
                                     var portalJumped = false
                                     var switchActivated = false
-                                    
+
                                     newCells.forEach { cell ->
                                         val type = afterBoard.cellTypes[cell]
                                         if (type is CellType.Portal) portalJumped = true
                                         if (type is CellType.Switch) switchActivated = true
                                     }
-                                    
+
                                     if (portalJumped) {
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     } else if (switchActivated) {
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     }
-                                    
+
                                     hapticController.onCellAdded(afterLen)
                                 }
                             },
@@ -370,7 +370,7 @@ private fun BoardLayers(
             val originX = layoutWidth / 2f
             val originY = layoutHeight / 2.5f
             val cellSize = cellSizePx
-            
+
             // Hit test for the 3 faces
             for (face in com.hoshiraflow.domain.model.CubeFace.entries) {
                 for (u in 0 until board.rows) {
@@ -428,6 +428,35 @@ private fun BoardLayers(
 
     fun crossedCellsFrom(startCell: Cell, targetCell: Cell): List<Cell> {
         if (startCell == targetCell) return emptyList()
+
+        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+            if (startCell.z != targetCell.z) {
+                // Cruce de cara: (row,col) de una cara no tiene relación
+                // geométrica con (row,col) de otra, así que interpolar en
+                // línea recta no tiene sentido (eso dibujaba la línea en
+                // celdas fantasma de la cara equivocada). Avanzamos un solo
+                // paso hacia la celda real bajo el dedo y dejamos que la
+                // validación de adyacencia (CubeEdgeMap) decida si el borde
+                // compartido las conecta.
+                return listOf(targetCell)
+            }
+            // Misma cara: interpolar u/v sigue siendo válido, pero hay que
+            // conservar el z de la cara -- antes se perdía (Cell(row,col) sin
+            // z quedaba en la cara 0 por defecto), lo que corrompía cualquier
+            // arrastre sobre una cara distinta de la primera (TOP).
+            val steps = mutableListOf<Cell>()
+            var row = startCell.row
+            var col = startCell.col
+            while (row != targetCell.row || col != targetCell.col) {
+                when {
+                    row != targetCell.row -> row += if (targetCell.row > row) 1 else -1
+                    else -> col += if (targetCell.col > col) 1 else -1
+                }
+                steps.add(Cell(row, col, targetCell.z))
+            }
+            return steps
+        }
+
         val steps = mutableListOf<Cell>()
         var row = startCell.row
         var col = startCell.col
@@ -464,7 +493,7 @@ private fun BoardLayers(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val downCell = offsetToCell(down.position)
                         val now = System.currentTimeMillis()
-                        
+
                         var touchedColor: PuzzleColor? = null
                         var lastTrackedCell: Cell? = null
 
@@ -472,10 +501,10 @@ private fun BoardLayers(
                             val liveBoard = currentBoardState
                             val liveConnected = currentConnectedState
                             val node = liveBoard.nodes.firstOrNull { it.cell == downCell }
-                            
+
                             val pathColor = liveBoard.paths.entries.firstOrNull { downCell in it.value }?.key
                             val candidate = node?.color ?: pathColor
-                            
+
                             if (candidate != null && candidate !in liveConnected) {
                                 val isDoubleTap = node != null && downCell == lastTapCell && (now - lastTapTime) < 300
                                 if (isDoubleTap) {
@@ -489,7 +518,7 @@ private fun BoardLayers(
                             lastTapTime = now
                             lastTapCell = downCell
                         }
-                        
+
                         dragPosition = down.position
 
                         var portalLockedCell: Cell? = null
@@ -498,10 +527,10 @@ private fun BoardLayers(
                             change.consume()
                             val clamped = clampToBoard(change.position)
                             dragPosition = clamped
-                            
+
                             val targetCell = offsetToCellClamped(clamped)
                             val color = touchedColor
-                            
+
                             if (color != null && targetCell != null) {
                                 // Gracefully ignore pointer movement over CellType.Void
                                 if (currentBoardState.cellTypes[targetCell] == CellType.Void) {
@@ -521,14 +550,14 @@ private fun BoardLayers(
 
                                 val livePath = currentBoardState.paths[color]
                                 val head = livePath?.lastOrNull() ?: lastTrackedCell
-                                
+
                                 if (head != null && targetCell != head) {
                                     val steps = crossedCellsFrom(head, targetCell)
                                     val validSteps = steps.filter { currentBoardState.cellTypes[it] != CellType.Void }
                                     if (validSteps.isNotEmpty()) {
                                         val beforeLen = currentBoardState.paths[color]?.size ?: 0
                                         onDrag(validSteps)
-                                        
+
                                         // Detection of portal jump to freeze pointer vector
                                         val afterBoard = currentBoardState
                                         val afterLen = afterBoard.paths[color]?.size ?: 0
@@ -568,9 +597,9 @@ private fun BoardLayers(
 }
 
 private fun DrawScope.drawGrid(
-    board: Board, 
-    cellWidth: Float, 
-    cellHeight: Float, 
+    board: Board,
+    cellWidth: Float,
+    cellHeight: Float,
     cellSize: Float,
     layoutWidth: Float,
     layoutHeight: Float
@@ -582,7 +611,7 @@ private fun DrawScope.drawGrid(
     if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
         val originX = layoutWidth / 2f
         val originY = layoutHeight / 2.5f
-        
+
         // Draw 3 faces
         com.hoshiraflow.domain.model.CubeFace.entries.forEach { face ->
             for (u in 0 until board.rows) {
@@ -594,10 +623,10 @@ private fun DrawScope.drawGrid(
                         }
                         close()
                     }
-                    
+
                     // Fill cell
                     drawPath(path, color = Color(0xFF1E293B).copy(alpha = 0.6f))
-                    
+
                     // Borders
                     drawPath(path, color = gridColor, style = Stroke(width = 2f))
                 }
@@ -627,7 +656,7 @@ private fun DrawScope.drawGrid(
 
             val w = cellSize * 0.8660254f
             val h = cellSize * 0.5f
-            
+
             val topPath = Path().apply {
                 moveTo(center.x, center.y - h)
                 lineTo(center.x + w, center.y)
@@ -635,7 +664,7 @@ private fun DrawScope.drawGrid(
                 lineTo(center.x - w, center.y)
                 close()
             }
-            
+
             val leftWall = Path().apply {
                 moveTo(center.x - w, center.y)
                 lineTo(center.x, center.y + h)
@@ -655,7 +684,7 @@ private fun DrawScope.drawGrid(
             drawPath(leftWall, color = Color(0xFF0F172A)) // Dark side
             drawPath(rightWall, color = Color(0xFF1E293B)) // Medium side
             drawPath(topPath, color = if (type == CellType.Blocked) blockedBgColor else Color(0xFF1E293B).copy(alpha = 0.6f))
-            
+
             // Neon Silhouette Borders
             val neonColor = Color(0xFF10B981).copy(alpha = 0.3f)
             drawPath(topPath, color = neonColor, style = Stroke(width = 1.5f))
@@ -718,7 +747,7 @@ private fun DrawScope.drawGrid(
                         Color(0xFFF59E0B)  // Ámbar
                     )
                     val portalColor = portalColors[type.portalId % portalColors.size]
-                    
+
                     val isOccupied = board.isCellOccupiedByAnyColor(cell) != null
                     val pulseAlpha = if (isOccupied) 0.5f else 0.3f
                     val pulseRadius = if (isOccupied) cellSize * 0.45f else cellSize * 0.42f
@@ -728,7 +757,7 @@ private fun DrawScope.drawGrid(
                         radius = pulseRadius,
                         center = center
                     )
-                    
+
                     drawCircle(
                         color = portalColor,
                         radius = cellSize * 0.35f,
@@ -761,7 +790,7 @@ private fun DrawScope.drawGrid(
                 is CellType.Switch -> {
                     val targetColor = type.targetColor.toComposeColor()
                     val isOccupied = board.isCellOccupiedByAnyColor(cell) != null
-                    
+
                     drawCircle(
                         color = if (isOccupied) Color(0xFF475569) else Color(0xFF334155),
                         radius = if (isOccupied) cellSize * 0.42f else cellSize * 0.4f,
@@ -780,7 +809,7 @@ private fun DrawScope.drawGrid(
                         radius = cellSize * 0.12f,
                         center = center
                     )
-                    
+
                     for (i in 0 until 6) {
                         val angle = (i * 60) * (Math.PI / 180).toFloat()
                         val length = if (isOccupied) 0.25f else 0.22f
@@ -868,7 +897,7 @@ private fun DrawScope.drawPaths(
 
         var currentPath = pathMap.getOrPut(pathCount++) { Path() }
         currentPath.rewind()
-        
+
         var pathHasPoints = false
         if (cells.isNotEmpty()) {
             val center = cellCenter(cells[0], cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight)
@@ -881,10 +910,18 @@ private fun DrawScope.drawPaths(
         for (i in 1 until cells.size) {
             val prevCell = cells[i - 1]
             val cell = cells[i]
-            val isPortalJump = if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-                !prevCell.isIsometricAdjacentTo(cell)
-            } else {
-                !prevCell.isAdjacentTo(cell)
+            val isPortalJump = when (board.topology) {
+                com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC -> !prevCell.isIsometricAdjacentTo(cell)
+                com.hoshiraflow.domain.model.BoardTopology.CUBE -> {
+                    // OJO: prevCell.isAdjacentTo(cell) NO sabe de aristas compartidas
+                    // entre caras del cubo. Sin este OR, cada cruce de cara válido
+                    // (TOP<->LEFT, TOP<->RIGHT, LEFT<->RIGHT) se confundía con un
+                    // salto de portal: la línea se cortaba y arrancaba un tramo
+                    // nuevo sin conectarlo al anterior (el "segmento fantasma").
+                    !(prevCell.isAdjacentTo(cell) ||
+                            com.hoshiraflow.domain.util.CubeEdgeMap.areAdjacent(prevCell, cell, board.rows))
+                }
+                else -> !prevCell.isAdjacentTo(cell)
             }
 
             if (currentColor != pathColor || isPortalJump) {
@@ -902,13 +939,13 @@ private fun DrawScope.drawPaths(
 
                 currentPath = pathMap.getOrPut(pathCount++) { Path() }
                 currentPath.rewind()
-                
+
                 val startCenter = if (isPortalJump) {
                     cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight)
                 } else {
                     cellCenter(prevCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight)
                 }
-                
+
                 currentPath.moveTo(startCenter.x, startCenter.y)
                 pathColor = currentColor
             }
@@ -925,7 +962,7 @@ private fun DrawScope.drawPaths(
 
         if (isActiveDrag) {
             val lastCell = cells.last()
-            
+
             if (currentColor != pathColor) {
                 if (pathHasPoints) {
                     val baseColor = pathColor.toComposeColor()
@@ -949,10 +986,10 @@ private fun DrawScope.drawPaths(
             val lastCenter = cellCenter(lastCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight)
             val dx = dragPosition!!.x - lastCenter.x
             val dy = dragPosition.y - lastCenter.y
-            
+
             val reachX = cellWidth * 0.5f
             val reachY = cellHeight * 0.5f
-            
+
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
                 val maxReach = kotlin.math.min(cellWidth, cellHeight) * 0.6f
                 val dist = kotlin.math.hypot(dx, dy)
@@ -1002,12 +1039,12 @@ private fun DrawScope.drawNodes(
 ) {
     board.nodes.forEach { node ->
         val center = cellCenter(node.cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight)
-        
+
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
             // Circular endpoints centered on top faces at their respective heightZ
             val baseRadius = if (node.color in connectedColors) cellSize * 0.35f else cellSize * 0.3f
             val scale = nodeScales[node.cell]?.value ?: 1f
-            
+
             // Outer glow
             drawCircle(color = node.color.toComposeColor().copy(alpha = 0.4f), radius = baseRadius * scale * 1.2f, center = center)
             // Main node
@@ -1023,9 +1060,9 @@ private fun DrawScope.drawNodes(
 }
 
 private fun DrawScope.drawParticles(
-    particles: List<ParticleBurst>, 
-    cellWidth: Float, 
-    cellHeight: Float, 
+    particles: List<ParticleBurst>,
+    cellWidth: Float,
+    cellHeight: Float,
     cellSize: Float,
     layoutWidth: Float,
     layoutHeight: Float
@@ -1067,12 +1104,12 @@ private fun DrawScope.drawRipple(board: Board, cellWidth: Float, cellHeight: Flo
 }
 
 private fun cellCenter(
-    cell: Cell, 
-    cellWidth: Float, 
-    cellHeight: Float, 
-    cellSize: Float, 
-    board: Board?, 
-    layoutWidth: Float, 
+    cell: Cell,
+    cellWidth: Float,
+    cellHeight: Float,
+    cellSize: Float,
+    board: Board?,
+    layoutWidth: Float,
     layoutHeight: Float
 ): Offset {
     if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
@@ -1101,13 +1138,10 @@ private fun isPointInPolygon(px: Float, py: Float, polyX: FloatArray, polyY: Flo
     for (current in polyX.indices) {
         next = current + 1
         if (next == polyX.size) next = 0
-        if (((polyY[current] > py) != (polyY[next] > py)) && 
+        if (((polyY[current] > py) != (polyY[next] > py)) &&
             (px < (polyX[next] - polyX[current]) * (py - polyY[current]) / (polyY[next] - polyY[current]) + polyX[current])) {
             collision = !collision
         }
     }
     return collision
 }
-
-
-
