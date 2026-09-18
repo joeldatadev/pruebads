@@ -52,11 +52,8 @@ private sealed class Screen {
     data class Portal(val index: Int, val seed: Long, val shape: com.hoshiraflow.domain.model.BoardShape? = null) : Screen()
     data class Switch(val index: Int, val seed: Long, val shape: com.hoshiraflow.domain.model.BoardShape? = null) : Screen()
     data class Master(val index: Int, val seed: Long, val shape: com.hoshiraflow.domain.model.BoardShape? = null) : Screen()
-    data class IsometricCampaign(val levelId: Int) : Screen()
-    data class IsometricInfinite(val index: Int, val seed: Long) : Screen()
     object CubeLevelSelection : Screen()
     data class CubeCampaign(val levelId: Int) : Screen()
-    object SimpleCube : Screen()
     object EmptyCube : Screen()
     object Daily : Screen()
     object Settings : Screen()
@@ -220,52 +217,6 @@ class MainActivity : ComponentActivity() {
                                         onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
-                                is Screen.IsometricCampaign -> {
-                                    BackHandler { screen = Screen.MainMenu }
-                                    GameScreen(
-                                        levelId = current.levelId,
-                                        levelRepository = levelRepository,
-                                        progressRepository = progressRepository,
-                                        dailyChallengeRepository = dailyChallengeRepository,
-                                        settingsRepository = settingsRepository,
-                                        isIsometricCampaign = true,
-                                        onNextLevel = { screen = Screen.IsometricCampaign(current.levelId + 1) },
-                                        onBackToLevelSelect = { screen = Screen.MainMenu },
-                                        onLevelRestarted = { onRestarted() },
-                                        onGoToMainMenu = { screen = Screen.MainMenu }
-                                    )
-                                }
-                                is Screen.IsometricInfinite -> {
-                                    BackHandler { screen = Screen.MainMenu }
-                                    GameScreen(
-                                        levelId = current.index,
-                                        levelRepository = levelRepository,
-                                        progressRepository = progressRepository,
-                                        dailyChallengeRepository = dailyChallengeRepository,
-                                        settingsRepository = settingsRepository,
-                                        infiniteSeed = current.seed,
-                                        isIsometricInfinite = true,
-                                        onNextLevel = { screen = Screen.IsometricInfinite(current.index + 1, System.currentTimeMillis()) },
-                                        onBackToLevelSelect = { screen = Screen.MainMenu },
-                                        onLevelRestarted = { onRestarted() },
-                                        onGoToMainMenu = { screen = Screen.MainMenu }
-                                    )
-                                }
-                                Screen.SimpleCube -> {
-                                    BackHandler { screen = Screen.MainMenu }
-                                    GameScreen(
-                                        levelId = 1,
-                                        levelRepository = levelRepository,
-                                        progressRepository = progressRepository,
-                                        dailyChallengeRepository = dailyChallengeRepository,
-                                        settingsRepository = settingsRepository,
-                                        isSimpleCube = true,
-                                        onNextLevel = { screen = Screen.MainMenu },
-                                        onBackToLevelSelect = { screen = Screen.MainMenu },
-                                        onLevelRestarted = { onRestarted() },
-                                        onGoToMainMenu = { screen = Screen.MainMenu }
-                                    )
-                                }
                                 Screen.CubeLevelSelection -> {
                                     BackHandler { screen = Screen.MainMenu }
                                     com.hoshiraflow.app.levelselect.CubeLevelSelectionScreen(
@@ -360,7 +311,6 @@ class MainActivity : ComponentActivity() {
                                         screen = Screen.Master(index = 1, seed = System.currentTimeMillis(), shape = shape)
                                     },
                                     onCubeModeSelected = { screen = Screen.CubeLevelSelection },
-                                    onSimpleCubeSelected = { screen = Screen.SimpleCube },
                                     onEmptyCubeSelected = { screen = Screen.EmptyCube }
                                 )
                             }

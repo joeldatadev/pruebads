@@ -94,7 +94,7 @@ fun LevelSelectionScreen(
                 ) { index ->
                     val levelNumber = index + 1
                     val isCompleted = levelNumber in uiState.completedLevels
-                    val isLocked = levelNumber > uiState.completedLevels.size + 1
+                    val isLocked = false // Unlocked for validation
                     val isCurrent = levelNumber == uiState.completedLevels.size + 1
 
                     LevelCard(
@@ -103,7 +103,7 @@ fun LevelSelectionScreen(
                         isLocked = isLocked,
                         isCurrent = isCurrent,
                         stars = if (isCompleted) 3 else 0,
-                        onClick = { if (!isLocked) onLevelSelected(levelNumber) }
+                        onClick = { onLevelSelected(levelNumber) }
                     )
                 }
             }

@@ -15,9 +15,7 @@ import com.hoshiraflow.domain.usecase.GenerateEmptyCubeUseCase
 import com.hoshiraflow.domain.usecase.GenerateMasterLevelUseCase
 import com.hoshiraflow.domain.usecase.GeneratePortalLevelUseCase
 import com.hoshiraflow.domain.usecase.GenerateProceduralLevelUseCase
-import com.hoshiraflow.domain.usecase.GenerateSimpleCubeUseCase
 import com.hoshiraflow.domain.usecase.GenerateSwitchLevelUseCase
-import com.hoshiraflow.domain.usecase.GenerateIsometricLevelUseCase
 import com.hoshiraflow.domain.usecase.GetDailyChallengeSeedUseCase
 import com.hoshiraflow.domain.usecase.ValidateMoveUseCase
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,8 +43,6 @@ class GameViewModel(
     private val generatePortalLevel = GeneratePortalLevelUseCase()
     private val generateSwitchLevel = GenerateSwitchLevelUseCase()
     private val generateMasterLevel = GenerateMasterLevelUseCase()
-    private val generateIsometricLevel = GenerateIsometricLevelUseCase()
-    private val generateSimpleCube = GenerateSimpleCubeUseCase()
     private val generateEmptyCube = GenerateEmptyCubeUseCase()
     private val getDailyChallengeSeed = GetDailyChallengeSeedUseCase()
     private val validateMove = ValidateMoveUseCase()
@@ -75,24 +71,6 @@ class GameViewModel(
         }
     }
 
-    fun loadIsometricCampaignLevel(levelId: Int) {
-        currentLevelId = levelId
-        currentDailyEpochDay = null
-        viewModelScope.launch {
-            _uiState.value = GameUiState(isLoading = true)
-            runCatching { levelRepository.getIsometricLevel(levelId) }
-                .onSuccess { board ->
-                    _uiState.value = GameUiState(
-                        isLoading = false,
-                        board = board
-                    )
-                    startTime = System.currentTimeMillis()
-                }
-                .onFailure { e ->
-                    _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
-                }
-        }
-    }
 
     fun loadCubeLevel(levelId: Int) {
         currentLevelId = levelId
@@ -229,43 +207,6 @@ class GameViewModel(
         }
     }
 
-    fun loadIsometricLevel(levelId: Int, seed: Long = System.currentTimeMillis()) {
-        currentLevelId = levelId
-        currentDailyEpochDay = null
-        viewModelScope.launch {
-            _uiState.value = GameUiState(isLoading = true)
-            runCatching {
-                generateIsometricLevel(seed = seed, index = levelId)
-            }.onSuccess { board ->
-                _uiState.value = GameUiState(
-                    isLoading = false,
-                    board = board
-                )
-                startTime = System.currentTimeMillis()
-            }.onFailure { e ->
-                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
-            }
-        }
-    }
-
-    fun loadSimpleCube(seed: Long = System.currentTimeMillis()) {
-        currentLevelId = null
-        currentDailyEpochDay = null
-        viewModelScope.launch {
-            _uiState.value = GameUiState(isLoading = true)
-            runCatching {
-                generateSimpleCube(seed = seed, index = 1)
-            }.onSuccess { board ->
-                _uiState.value = GameUiState(
-                    isLoading = false,
-                    board = board
-                )
-                startTime = System.currentTimeMillis()
-            }.onFailure { e ->
-                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
-            }
-        }
-    }
 
     fun loadEmptyCube() {
         currentLevelId = null

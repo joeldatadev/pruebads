@@ -91,7 +91,7 @@ fun CubeLevelSelectionScreen(
             ) { index ->
                 val levelNumber = index + 1
                 val isCompleted = levelNumber in completedLevels
-                val isLocked = levelNumber > completedLevels.size + 1
+                val isLocked = false // Unlocked for validation
                 val isCurrent = levelNumber == completedLevels.size + 1
 
                 CubeLevelCard(
@@ -99,7 +99,7 @@ fun CubeLevelSelectionScreen(
                     isCompleted = isCompleted,
                     isLocked = isLocked,
                     isCurrent = isCurrent,
-                    onClick = { if (!isLocked) onLevelSelected(levelNumber) }
+                    onClick = { onLevelSelected(levelNumber) }
                 )
             }
         }

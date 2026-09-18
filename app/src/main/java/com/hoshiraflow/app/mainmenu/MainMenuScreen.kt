@@ -70,7 +70,6 @@ fun MainMenuScreen(
     onMasterModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onInfiniteModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onCubeModeSelected: () -> Unit = {},
-    onSimpleCubeSelected: () -> Unit = {},
     onEmptyCubeSelected: () -> Unit = {}
 ) {
     val viewModel: LevelSelectViewModel = viewModel(
@@ -275,17 +274,6 @@ fun MainMenuScreen(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.Start).padding(bottom = 12.dp)
         )
-
-        SmallMenuCard(
-            title = "Cubo 2x2x2 Minimal",
-            modifier = Modifier.fillMaxWidth(),
-            subtitle = "Validar proyección, adyacencia y touch",
-            icon = Icons.Filled.BugReport,
-            gradient = Brush.linearGradient(colors = listOf(Color(0xFF4B5563), Color(0xFF1F2937))),
-            onClick = onSimpleCubeSelected
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         SmallMenuCard(
             title = "Cubo Real (3 Caras)",

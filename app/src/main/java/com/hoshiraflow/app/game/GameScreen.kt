@@ -89,10 +89,7 @@ fun GameScreen(
     switchShape: com.hoshiraflow.domain.model.BoardShape? = null,
     masterSeed: Long? = null,
     masterShape: com.hoshiraflow.domain.model.BoardShape? = null,
-    isIsometricCampaign: Boolean = false,
-    isIsometricInfinite: Boolean = false,
     isCubeCampaign: Boolean = false,
-    isSimpleCube: Boolean = false,
     isEmptyCube: Boolean = false,
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
@@ -116,9 +113,9 @@ fun GameScreen(
         hapticController.enabled = settings.hapticsEnabled
     }
 
-    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isIsometricCampaign, isIsometricInfinite, isCubeCampaign, isSimpleCube, isEmptyCube) {
+    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isCubeCampaign, isEmptyCube) {
         val selectedShape: com.hoshiraflow.domain.model.BoardShape? = when {
-            infiniteSeed != null && !isIsometricInfinite -> infiniteShape
+            infiniteSeed != null -> infiniteShape
             portalSeed != null -> portalShape
             switchSeed != null -> switchShape
             masterSeed != null -> masterShape
@@ -127,10 +124,7 @@ fun GameScreen(
         when {
             dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
             isEmptyCube -> viewModel.loadEmptyCube()
-            isSimpleCube -> viewModel.loadSimpleCube()
             isCubeCampaign -> viewModel.loadCubeLevel(levelId)
-            isIsometricCampaign -> viewModel.loadIsometricCampaignLevel(levelId)
-            isIsometricInfinite && infiniteSeed != null -> viewModel.loadIsometricLevel(levelId, infiniteSeed)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed, selectedShape)
             portalSeed != null -> viewModel.loadPortalLevel(levelId, portalSeed, selectedShape)
             switchSeed != null -> viewModel.loadSwitchLevel(levelId, switchSeed, selectedShape)
