@@ -276,10 +276,10 @@ fun MainMenuScreen(
         )
 
         SmallMenuCard(
-            title = "Cubo Real (3 Caras)",
+            title = "Pirámide 3D (Debug)",
             modifier = Modifier.fillMaxWidth(),
-            subtitle = "Validación de geometría 3D real",
-            icon = Icons.Filled.SquareFoot,
+            subtitle = "Validación de estructura y capas",
+            icon = Icons.Filled.Layers,
             gradient = Brush.linearGradient(colors = listOf(Color(0xFF6366F1), Color(0xFF4338CA))),
             onClick = onEmptyCubeSelected
         )

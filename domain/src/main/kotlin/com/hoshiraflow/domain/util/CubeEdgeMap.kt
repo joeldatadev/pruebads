@@ -7,7 +7,7 @@ import com.hoshiraflow.domain.model.CubeFace
  * Mapeo de adyacencias entre las aristas de un cubo de 3 caras (TOP, LEFT, RIGHT).
  *
  * Verificado geométricamente (no derivado a mano): dos celdas de caras
- * distintas son "vecinas de cubo" si sus polígonos (ver [IsometricCubeProjection.getCellPolygon])
+ * distintas son "vecinas de cubo" si sus polígonos (ver [CubeProjection.getCellPolygon])
  * comparten un borde completo. Comprobando eso para las 3 caras se obtiene
  * exactamente:
  *

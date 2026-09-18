@@ -7,10 +7,8 @@ import com.hoshiraflow.domain.model.Board
 
 interface LevelRepository {
     suspend fun getLevel(levelId: Int): Board
-    suspend fun getIsometricLevel(levelId: Int): Board
     suspend fun getCubeLevel(levelId: Int): Board
     suspend fun getTotalLevels(): Int
-    suspend fun getTotalIsometricLevels(): Int
     suspend fun getTotalCubeLevels(): Int
 }
 

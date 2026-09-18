@@ -18,7 +18,7 @@ fun LevelDto.toBoard(): Board {
         )
     }
     val boardTopology = when(topology?.uppercase()) {
-        "ISOMETRIC" -> BoardTopology.ISOMETRIC
+        "CUBE" -> BoardTopology.CUBE
         else -> BoardTopology.CARTESIAN
     }
     return Board(rows = rows, cols = cols, nodes = nodes, topology = boardTopology)

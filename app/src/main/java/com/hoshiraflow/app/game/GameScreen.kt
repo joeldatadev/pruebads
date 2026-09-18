@@ -8,7 +8,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -51,7 +50,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -65,7 +63,7 @@ import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.CellType
 import com.hoshiraflow.domain.model.PuzzleColor
-import com.hoshiraflow.domain.util.IsometricCubeProjection
+import com.hoshiraflow.domain.util.CubeProjection
 import com.hoshiraflow.domain.repository.DailyChallengeRepository
 import com.hoshiraflow.domain.repository.GameSettings
 import com.hoshiraflow.domain.repository.LevelRepository
@@ -235,8 +233,6 @@ fun GameScreen(
                         }
                     }
 
-                    // Header clean block completed
-
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         BoardLayers(
                             board = board,
@@ -264,7 +260,6 @@ fun GameScreen(
                                 if (afterLen > beforeLen && color != null && beforeBoard != null && afterBoard != null) {
                                     val newCells = afterBoard.paths[color]!!.takeLast(afterLen - beforeLen)
 
-                                    // Detectar Portales e Interruptores para Haptics
                                     var portalJumped = false
                                     var switchActivated = false
 
@@ -347,9 +342,6 @@ private fun BoardLayers(
     var cellWidthPx by remember { mutableFloatStateOf(0f) }
     var cellHeightPx by remember { mutableFloatStateOf(0f) }
     var cellSizePx by remember { mutableFloatStateOf(0f) }
-    // FIX: origen real del cubo, calculado por fitCubeToArea (ver más abajo)
-    // para que las 3 caras quepan enteras. Reemplaza el originX/Y fijo que
-    // dejaba celdas de la cara TOP fuera del Canvas.
     var cubeOriginX by remember { mutableFloatStateOf(0f) }
     var cubeOriginY by remember { mutableFloatStateOf(0f) }
     var dragPosition by remember { mutableStateOf<Offset?>(null) }
@@ -360,7 +352,6 @@ private fun BoardLayers(
     val currentBoardState by rememberUpdatedState(board)
     val currentConnectedState by rememberUpdatedState(connectedColors)
 
-    // Pre-allocating paths to avoid Path() in DrawScope
     val pathMap = remember { mutableMapOf<Int, Path>() }
 
     var layoutWidth by remember { mutableFloatStateOf(0f) }
@@ -373,11 +364,10 @@ private fun BoardLayers(
             val originY = cubeOriginY
             val cellSize = cellSizePx
 
-            // Hit test for the 3 faces
             for (face in com.hoshiraflow.domain.model.CubeFace.entries) {
                 for (u in 0 until board.rows) {
                     for (v in 0 until board.cols) {
-                        val poly = IsometricCubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
+                        val poly = CubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
                         val xs = poly.map { it.first }.toFloatArray()
                         val ys = poly.map { it.second }.toFloatArray()
                         if (isPointInPolygon(offset.x, offset.y, xs, ys)) {
@@ -387,14 +377,6 @@ private fun BoardLayers(
                 }
             }
             return null
-        }
-        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-            val originX = layoutWidth / 2f
-            val originY = layoutHeight / 4f
-            val layerHeight = cellSizePx * 0.5f
-            return com.hoshiraflow.domain.util.IsometricProjection.getHitBlockFace(
-                offset.x, offset.y, board, cellSizePx, cellSizePx, originX, originY, layerHeight
-            )
         }
         val cellWidth = layoutWidth / board.width
         val cellHeight = layoutHeight / board.height
@@ -407,15 +389,7 @@ private fun BoardLayers(
     fun offsetToCellClamped(offset: Offset): Cell? {
         if (layoutWidth <= 0f || layoutHeight <= 0f) return null
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
-            return offsetToCell(offset) // No clamping for cube yet
-        }
-        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-            val originX = layoutWidth / 2f
-            val originY = layoutHeight / 4f
-            val layerHeight = cellSizePx * 0.5f
-            return com.hoshiraflow.domain.util.IsometricProjection.getHitBlockFace(
-                offset.x, offset.y, board, cellSizePx, cellSizePx, originX, originY, layerHeight
-            )
+            return offsetToCell(offset)
         }
         val cellWidth = layoutWidth / board.width
         val cellHeight = layoutHeight / board.height
@@ -433,19 +407,8 @@ private fun BoardLayers(
 
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
             if (startCell.z != targetCell.z) {
-                // Cruce de cara: (row,col) de una cara no tiene relación
-                // geométrica con (row,col) de otra, así que interpolar en
-                // línea recta no tiene sentido (eso dibujaba la línea en
-                // celdas fantasma de la cara equivocada). Avanzamos un solo
-                // paso hacia la celda real bajo el dedo y dejamos que la
-                // validación de adyacencia (CubeEdgeMap) decida si el borde
-                // compartido las conecta.
                 return listOf(targetCell)
             }
-            // Misma cara: interpolar u/v sigue siendo válido, pero hay que
-            // conservar el z de la cara -- antes se perdía (Cell(row,col) sin
-            // z quedaba en la cara 0 por defecto), lo que corrompía cualquier
-            // arrastre sobre una cara distinta de la primera (TOP).
             val steps = mutableListOf<Cell>()
             var row = startCell.row
             var col = startCell.col
@@ -482,7 +445,7 @@ private fun BoardLayers(
             layoutWidth = size.width
             layoutHeight = size.height
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
-                val layout = IsometricCubeProjection.fitCubeToArea(board.rows, size.width, size.height)
+                val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height)
                 cubeOriginX = layout.originX
                 cubeOriginY = layout.originY
                 cellWidthPx = layout.cellSize
@@ -543,19 +506,17 @@ private fun BoardLayers(
                             val color = touchedColor
 
                             if (color != null && targetCell != null) {
-                                // Gracefully ignore pointer movement over CellType.Void
                                 if (currentBoardState.cellTypes[targetCell] == CellType.Void) {
                                     return@drag
                                 }
 
-                                // Handle Portal Lock to prevent drift
                                 if (portalLockedCell != null) {
                                     if (targetCell == portalLockedCell) {
-                                        return@drag // Finger is still inside the exit portal
+                                        return@drag
                                     } else if (targetCell.isAdjacentTo(portalLockedCell!!)) {
-                                        portalLockedCell = null // Explicit adjacent move detected, unlock
+                                        portalLockedCell = null
                                     } else {
-                                        return@drag // Ignore diagonal or non-adjacent moves from exit
+                                        return@drag
                                     }
                                 }
 
@@ -569,7 +530,6 @@ private fun BoardLayers(
                                         val beforeLen = currentBoardState.paths[color]?.size ?: 0
                                         onDrag(validSteps)
 
-                                        // Detection of portal jump to freeze pointer vector
                                         val afterBoard = currentBoardState
                                         val afterLen = afterBoard.paths[color]?.size ?: 0
                                         if (afterLen > beforeLen + 1) {
@@ -592,25 +552,17 @@ private fun BoardLayers(
         ) {
             layoutWidth = size.width
             layoutHeight = size.height
-            when (board.topology) {
-                com.hoshiraflow.domain.model.BoardTopology.CUBE -> {
-                    val layout = IsometricCubeProjection.fitCubeToArea(board.rows, size.width, size.height)
-                    cubeOriginX = layout.originX
-                    cubeOriginY = layout.originY
-                    cellWidthPx = layout.cellSize
-                    cellHeightPx = layout.cellSize
-                    cellSizePx = layout.cellSize
-                }
-                com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC -> {
-                    cellWidthPx = size.width / 10f
-                    cellHeightPx = size.height / 10f
-                    cellSizePx = kotlin.math.min(cellWidthPx, cellHeightPx)
-                }
-                else -> {
-                    cellWidthPx = size.width / board.width
-                    cellHeightPx = size.height / board.height
-                    cellSizePx = kotlin.math.min(cellWidthPx, cellHeightPx)
-                }
+            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+                val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height)
+                cubeOriginX = layout.originX
+                cubeOriginY = layout.originY
+                cellWidthPx = layout.cellSize
+                cellHeightPx = layout.cellSize
+                cellSizePx = layout.cellSize
+            } else {
+                cellWidthPx = size.width / board.width
+                cellHeightPx = size.height / board.height
+                cellSizePx = kotlin.math.min(cellWidthPx, cellHeightPx)
             }
 
             drawGrid(board, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
@@ -636,17 +588,16 @@ private fun DrawScope.drawGrid(
 ) {
     val gridColor = Color(0xFF2A2A2A)
     val blockedBgColor = Color(0xFF1E293B)
-    val voidBgColor = Color(0xFF0F172A) // Base dark background for non-playable Void cells
+    val voidBgColor = Color(0xFF0F172A)
 
     if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
         val originX = cubeOriginX
         val originY = cubeOriginY
 
-        // Caras con degradados suaves para dar profundidad volumétrica
         val faceGradients = mapOf(
-            com.hoshiraflow.domain.model.CubeFace.TOP to Color(0xFF2E3B4E),   // Luz desde arriba
-            com.hoshiraflow.domain.model.CubeFace.LEFT to Color(0xFF1A222F),  // Sombra lateral
-            com.hoshiraflow.domain.model.CubeFace.RIGHT to Color(0xFF232D3D) // Penumbra lateral
+            com.hoshiraflow.domain.model.CubeFace.TOP to Color(0xFF2E3B4E),
+            com.hoshiraflow.domain.model.CubeFace.LEFT to Color(0xFF1A222F),
+            com.hoshiraflow.domain.model.CubeFace.RIGHT to Color(0xFF232D3D)
         )
 
         com.hoshiraflow.domain.model.CubeFace.entries.forEach { face ->
@@ -654,7 +605,7 @@ private fun DrawScope.drawGrid(
             
             for (u in 0 until board.rows) {
                 for (v in 0 until board.cols) {
-                    val poly = IsometricCubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
+                    val poly = CubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
                     val path = Path().apply {
                         poly.forEachIndexed { i, p ->
                             if (i == 0) moveTo(p.first, p.second) else lineTo(p.first, p.second)
@@ -662,10 +613,7 @@ private fun DrawScope.drawGrid(
                         close()
                     }
 
-                    // Fondo de celda con un sutil borde interno
                     drawPath(path, color = faceColor.copy(alpha = 0.9f))
-
-                    // Bordes de rejilla marcados para una definición premium del cubo
                     drawPath(
                         path, 
                         color = Color.White.copy(alpha = 0.2f), 
@@ -677,71 +625,6 @@ private fun DrawScope.drawGrid(
         return
     }
 
-    if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-        val originX = layoutWidth / 2f
-        val originY = layoutHeight / 4f
-        val layerHeight = cellSize * 0.5f
-
-        // 1. Draw ALL blocks first to ensure correct depth and silhouette
-        val allCells = board.cellTypes.keys + board.nodes.map { it.cell } + board.paths.values.flatten()
-        val sortedCells = allCells.distinct().sortedWith(compareBy({ it.z }, { it.row + it.col }))
-
-        sortedCells.forEach { cell ->
-            val type = board.cellTypes[cell] ?: CellType.Empty
-            if (type == CellType.Void) return@forEach
-
-            val heightZ = cell.z.toFloat()
-            val screenPos = com.hoshiraflow.domain.util.IsometricProjection.gridToScreen(
-                cell.col, cell.row, heightZ, cellSize, cellSize, originX, originY, layerHeight
-            )
-            val center = Offset(screenPos.first, screenPos.second)
-
-            val w = cellSize * 0.8660254f
-            val h = cellSize * 0.5f
-
-            val topPath = Path().apply {
-                moveTo(center.x, center.y - h)
-                lineTo(center.x + w, center.y)
-                lineTo(center.x, center.y + h)
-                lineTo(center.x - w, center.y)
-                close()
-            }
-
-            val leftWall = Path().apply {
-                moveTo(center.x - w, center.y)
-                lineTo(center.x, center.y + h)
-                lineTo(center.x, center.y + h + layerHeight)
-                lineTo(center.x - w, center.y + layerHeight)
-                close()
-            }
-            val rightWall = Path().apply {
-                moveTo(center.x + w, center.y)
-                lineTo(center.x, center.y + h)
-                lineTo(center.x, center.y + h + layerHeight)
-                lineTo(center.x + w, center.y + layerHeight)
-                close()
-            }
-
-            // High-end volumetric shading
-            drawPath(leftWall, color = Color(0xFF0F172A)) // Dark side
-            drawPath(rightWall, color = Color(0xFF1E293B)) // Medium side
-            drawPath(topPath, color = if (type == CellType.Blocked) blockedBgColor else Color(0xFF1E293B).copy(alpha = 0.6f))
-
-            // Neon Silhouette Borders
-            val neonColor = Color(0xFF10B981).copy(alpha = 0.3f)
-            drawPath(topPath, color = neonColor, style = Stroke(width = 1.5f))
-            drawPath(leftWall, color = neonColor.copy(alpha = 0.2f), style = Stroke(width = 1f))
-            drawPath(rightWall, color = neonColor.copy(alpha = 0.2f), style = Stroke(width = 1f))
-
-            if (type == CellType.Blocked) {
-                drawLine(gridColor, Offset(center.x - w*0.4f, center.y - h*0.4f), Offset(center.x + w*0.4f, center.y + h*0.4f), 3f)
-                drawLine(gridColor, Offset(center.x + w*0.4f, center.y - h*0.4f), Offset(center.x - w*0.4f, center.y + h*0.4f), 3f)
-            }
-        }
-        return
-    }
-
-    // 1. Draw each cell background and types
     for (row in 0 until board.height) {
         for (col in 0 until board.width) {
             val cell = Cell(row, col)
@@ -781,12 +664,11 @@ private fun DrawScope.drawGrid(
                     )
                 }
                 is CellType.Portal -> {
-                    // Colores para distinguir portales según su ID
                     val portalColors = listOf(
-                        Color(0xFF8B5CF6), // Violeta
-                        Color(0xFFEC4899), // Rosa
-                        Color(0xFF06B6D4), // Cyan
-                        Color(0xFFF59E0B)  // Ámbar
+                        Color(0xFF8B5CF6),
+                        Color(0xFFEC4899),
+                        Color(0xFF06B6D4),
+                        Color(0xFFF59E0B)
                     )
                     val portalColor = portalColors[type.portalId % portalColors.size]
 
@@ -813,7 +695,6 @@ private fun DrawScope.drawGrid(
                         center = center
                     )
 
-                    // Destellos visuales si está activado
                     if (isOccupied) {
                         for (i in 0 until 4) {
                             val angle = (i * 90) * (Math.PI / 180).toFloat()
@@ -872,7 +753,6 @@ private fun DrawScope.drawGrid(
                         )
                     }
 
-                    // Sparkle effect for Switch
                     if (isOccupied) {
                         drawCircle(
                             color = Color.White.copy(alpha = 0.5f),
@@ -881,12 +761,11 @@ private fun DrawScope.drawGrid(
                         )
                     }
                 }
-                CellType.Empty -> { /* No dibujamos nada especial */ }
+                CellType.Empty -> { }
             }
         }
     }
 
-    // 2. Draw only standard grid lines between valid playable cells
     for (row in 0..board.height) {
         val y = row * cellHeight
         for (col in 0 until board.width) {
@@ -955,13 +834,7 @@ private fun DrawScope.drawPaths(
             val prevCell = cells[i - 1]
             val cell = cells[i]
             val isPortalJump = when (board.topology) {
-                com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC -> !prevCell.isIsometricAdjacentTo(cell)
                 com.hoshiraflow.domain.model.BoardTopology.CUBE -> {
-                    // OJO: prevCell.isAdjacentTo(cell) NO sabe de aristas compartidas
-                    // entre caras del cubo. Sin este OR, cada cruce de cara válido
-                    // (TOP<->LEFT, TOP<->RIGHT, LEFT<->RIGHT) se confundía con un
-                    // salto de portal: la línea se cortaba y arrancaba un tramo
-                    // nuevo sin conectarlo al anterior (el "segmento fantasma").
                     !(prevCell.isAdjacentTo(cell) ||
                             com.hoshiraflow.domain.util.CubeEdgeMap.areAdjacent(prevCell, cell, board.rows))
                 }
@@ -996,10 +869,6 @@ private fun DrawScope.drawPaths(
 
             val center = cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
             
-            // FIX para cruce de aristas en Cubo:
-            // Cuando saltamos de una cara a otra, el lineTo(center.x, center.y) 
-            // crea una línea recta que ignora la geometría del cubo.
-            // Dibujamos un punto intermedio en la arista compartida para que la línea se "doble".
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE && !isPortalJump) {
                 val edgePoint = calculateCubeEdgeMidPoint(prevCell, cell, cellSize, cubeOriginX, cubeOriginY)
                 if (edgePoint != null) {
@@ -1046,8 +915,6 @@ private fun DrawScope.drawPaths(
             val maxReach = cellSize * 0.8f
             val dist = kotlin.math.hypot(dx, dy)
             
-            // En el Cubo e Isometric, no queremos "snapping" a 90 grados (plano)
-            // Queremos que la línea siga el vector real del dedo para sentir la profundidad
             val clampedEnd = if (dist > maxReach) {
                 Offset(
                     lastCenter.x + dx / dist * maxReach,
@@ -1088,23 +955,9 @@ private fun DrawScope.drawNodes(
 ) {
     board.nodes.forEach { node ->
         val center = cellCenter(node.cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
-
-        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-            // Circular endpoints centered on top faces at their respective heightZ
-            val baseRadius = if (node.color in connectedColors) cellSize * 0.35f else cellSize * 0.3f
-            val scale = nodeScales[node.cell]?.value ?: 1f
-
-            // Outer glow
-            drawCircle(color = node.color.toComposeColor().copy(alpha = 0.4f), radius = baseRadius * scale * 1.2f, center = center)
-            // Main node
-            drawCircle(color = node.color.toComposeColor(), radius = baseRadius * scale, center = center)
-            // Inner highlight
-            drawCircle(color = Color.White.copy(alpha = 0.5f), radius = baseRadius * scale * 0.35f, center = center)
-        } else {
-            val baseRadius = if (node.color in connectedColors) cellSize * 0.38f else cellSize * 0.32f
-            val scale = nodeScales[node.cell]?.value ?: 1f
-            drawCircle(color = node.color.toComposeColor(), radius = baseRadius * scale, center = center)
-        }
+        val baseRadius = if (node.color in connectedColors) cellSize * 0.38f else cellSize * 0.32f
+        val scale = nodeScales[node.cell]?.value ?: 1f
+        drawCircle(color = node.color.toComposeColor(), radius = baseRadius * scale, center = center)
     }
 }
 
@@ -1165,18 +1018,8 @@ private fun cellCenter(
 ): Offset {
     if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
         val face = com.hoshiraflow.domain.model.CubeFace.entries[cell.z]
-        val pos = IsometricCubeProjection.cellToScreen(face, cell.row, cell.col, cellSize, cubeOriginX, cubeOriginY)
+        val pos = CubeProjection.cellToScreen(face, cell.row, cell.col, cellSize, cubeOriginX, cubeOriginY)
         return Offset(pos.first, pos.second)
-    }
-    if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.ISOMETRIC) {
-        val originX = layoutWidth / 2f
-        val originY = layoutHeight / 4f
-        val layerHeight = cellSize * 0.5f
-        val heightZ = cell.z.toFloat()
-        val screenPos = com.hoshiraflow.domain.util.IsometricProjection.gridToScreen(
-            cell.col, cell.row, heightZ, cellSize, cellSize, originX, originY, layerHeight
-        )
-        return Offset(screenPos.first, screenPos.second)
     }
     return Offset(cell.col * cellWidth + cellWidth / 2f, cell.row * cellHeight + cellHeight / 2f)
 }
@@ -1205,16 +1048,15 @@ private fun calculateCubeEdgeMidPoint(
     val fFace = com.hoshiraflow.domain.model.CubeFace.entries[from.z]
     val tFace = com.hoshiraflow.domain.model.CubeFace.entries[to.z]
 
-    val fPoly = IsometricCubeProjection.getCellPolygon(fFace, from.row, from.col, cellSize, originX, originY)
-    val tPoly = IsometricCubeProjection.getCellPolygon(tFace, to.row, to.col, cellSize, originX, originY)
+    val fPoly = CubeProjection.getCellPolygon(fFace, from.row, from.col, cellSize, originX, originY)
+    val tPoly = CubeProjection.getCellPolygon(tFace, to.row, to.col, cellSize, originX, originY)
 
-    // Buscamos los 2 puntos en común que comparten ambos polígonos
     val sharedPoints = mutableListOf<Pair<Float, Float>>()
     for (fp in fPoly) {
         for (tp in tPoly) {
             val dx = fp.first - tp.first
             val dy = fp.second - tp.second
-            if (kotlin.math.hypot(dx, dy) < 1.0f) { // Tolerancia por flotantes
+            if (kotlin.math.hypot(dx, dy) < 1.0f) {
                 sharedPoints.add(fp)
             }
         }

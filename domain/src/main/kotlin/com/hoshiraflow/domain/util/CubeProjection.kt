@@ -6,9 +6,9 @@ import com.hoshiraflow.domain.model.CubeFace
  * Utilidad para proyectar celdas de un cubo de 3 caras (TOP, LEFT, RIGHT)
  * a coordenadas de pantalla (Pair<Float, Float>).
  *
- * Basado en una proyección isométrica donde las 3 caras se encuentran en un vértice central.
+ * Basado en una proyección donde las 3 caras se encuentran en un vértice central.
  */
-object IsometricCubeProjection {
+object CubeProjection {
 
     private const val COS_30 = 0.8660254f
     private const val SIN_30 = 0.5f
@@ -20,21 +20,6 @@ object IsometricCubeProjection {
      * Calcula origen (vértice donde se unen las 3 caras) y cellSize para que
      * el cubo COMPLETO (sus 3 caras) quepa dentro de [availableWidth] x
      * [availableHeight] sin recortar ninguna celda.
-     *
-     * FIX: antes GameScreen usaba un origen fijo (layoutWidth/2f,
-     * layoutHeight/2.5f) sin relación con `n` ni con el cellSize real. Para
-     * n=4 eso hacía que celdas de la cara TOP con (u+v) alto -p.ej. el nodo
-     * extremo (n-1, 1)- se proyectaran con y < 0: fuera del área dibujada Y
-     * fuera del área que recibe gestos (pointerInput solo ve toques dentro
-     * de los límites del Composable). Resultado observado: nodo invisible,
-     * intocable, y cualquier color cuyo camino pasara por esa zona (el
-     * morado, en el diagnóstico) se bloqueaba justo al intentar avanzar
-     * hacia ella, mientras otros colores (cian, amarillo) seguían
-     * funcionando por no tocar esa esquina.
-     *
-     * En vez de derivar una fórmula cerrada a mano (frágil ante cambios de
-     * la proyección), medimos el bounding box real recorriendo los VÉRTICES
-     * de cada celda con cellSize=1, y luego escalamos + centramos.
      */
     fun fitCubeToArea(
         n: Int,
@@ -86,12 +71,6 @@ object IsometricCubeProjection {
 
     /**
      * Calcula el centro de una celda en pantalla.
-     * @param face Cara del cubo
-     * @param u Columna local (0..N-1)
-     * @param v Fila local (0..N-1)
-     * @param cellSize Tamaño base de la celda
-     * @param originX Centro X de la proyección (vértice donde se unen las 3 caras)
-     * @param originY Centro Y de la proyección
      */
     fun cellToScreen(
         face: CubeFace,

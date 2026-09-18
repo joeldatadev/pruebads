@@ -13,11 +13,6 @@ class LevelRepositoryImpl(
         return dto.toBoard()
     }
 
-    override suspend fun getIsometricLevel(levelId: Int): Board {
-        val dto = dataSource.loadIsometricLevel(levelId)
-        return dto.toBoard()
-    }
-
     override suspend fun getCubeLevel(levelId: Int): Board {
         // Para el cubo usamos el generador procedural (100 niveles)
         val generator = com.hoshiraflow.domain.usecase.GenerateCubeLevelUseCase()
@@ -31,7 +26,6 @@ class LevelRepositoryImpl(
     }
 
     override suspend fun getTotalLevels(): Int = dataSource.countLevels()
-    override suspend fun getTotalIsometricLevels(): Int = dataSource.countIsometricLevels()
     override suspend fun getTotalCubeLevels(): Int = 100
 }
 

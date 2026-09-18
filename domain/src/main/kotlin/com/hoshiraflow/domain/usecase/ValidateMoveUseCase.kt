@@ -29,7 +29,6 @@ class ValidateMoveUseCase {
         }
 
         val isAdjacent = when (board.topology) {
-            BoardTopology.ISOMETRIC -> lastCell.isIsometricAdjacentTo(targetCell)
             BoardTopology.CUBE -> CubeEdgeMap.areAdjacent(lastCell, targetCell, board.rows)
                 || lastCell.isAdjacentTo(targetCell)
             else -> lastCell.isAdjacentTo(targetCell)

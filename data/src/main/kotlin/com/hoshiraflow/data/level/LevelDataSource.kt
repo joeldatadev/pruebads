@@ -22,20 +22,8 @@ class LevelDataSource(private val context: Context) {
         json.decodeFromString(LevelDto.serializer(), text)
     }
 
-    suspend fun loadIsometricLevel(levelId: Int): LevelDto = withContext(Dispatchers.IO) {
-        val text = context.assets.open("levels_3d.json").bufferedReader().use { it.readText() }
-        val levels = json.decodeFromString(ListSerializer(LevelDto.serializer()), text)
-        levels.firstOrNull { it.id == levelId } ?: levels.first()
-    }
-
     suspend fun countLevels(): Int = withContext(Dispatchers.IO) {
         context.assets.list("levels")?.size ?: 0
-    }
-
-    suspend fun countIsometricLevels(): Int = withContext(Dispatchers.IO) {
-        val text = context.assets.open("levels_3d.json").bufferedReader().use { it.readText() }
-        val levels = json.decodeFromString(ListSerializer(LevelDto.serializer()), text)
-        levels.size
     }
 }
 

@@ -7,15 +7,6 @@ enum class BoardTopology {
     /** Grilla 2D estándar con adyacencia ortogonal (4 vecinos). */
     CARTESIAN,
 
-    /** 
-     * Proyección isométrica 3D basada en rombos cuadrados.
-     * Usa adyacencia ortogonal 3D (6 vecinos: N, S, E, W + Arriba, Abajo).
-     * Referencia: ver IsometricProjection.kt para el renderizado.
-     * Nota: Futuras topologías hexagonales (tipo panal) deben usar un nuevo enum (ej. HEX_ISOMETRIC)
-     * y su propia fórmula de proyección, no reutilizar la lógica de ISOMETRIC.
-     */
-    ISOMETRIC,
-
     /**
      * Modelo de cubo real con 3 caras visibles (TOP, LEFT, RIGHT).
      * Cada cara es un grid NxM independiente conectado por aristas.
