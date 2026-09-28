@@ -121,7 +121,7 @@ fun GameScreen(
         }
         when {
             dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
-            isEmptyCube -> viewModel.loadEmptyCube()
+            isEmptyCube -> viewModel.loadDuoCube(levelId)
             isCubeCampaign -> viewModel.loadCubeLevel(levelId)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed, selectedShape)
             portalSeed != null -> viewModel.loadPortalLevel(levelId, portalSeed, selectedShape)
@@ -364,14 +364,17 @@ private fun BoardLayers(
             val originY = cubeOriginY
             val cellSize = cellSizePx
 
-            for (face in com.hoshiraflow.domain.model.CubeFace.entries) {
-                for (u in 0 until board.rows) {
-                    for (v in 0 until board.cols) {
-                        val poly = CubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
-                        val xs = poly.map { it.first }.toFloatArray()
-                        val ys = poly.map { it.second }.toFloatArray()
-                        if (isPointInPolygon(offset.x, offset.y, xs, ys)) {
-                            return Cell(u, v, face.ordinal)
+            for (block in 0 until board.cubeBlocks) {
+                for (face in com.hoshiraflow.domain.model.CubeFace.entries) {
+                    for (u in 0 until board.rows) {
+                        for (v in 0 until board.cols) {
+                            val cell = Cell(u, v, block * 3 + face.ordinal)
+                            val poly = CubeProjection.polygonOf(cell, board.rows, cellSize, originX, originY)
+                            val xs = poly.map { it.first }.toFloatArray()
+                            val ys = poly.map { it.second }.toFloatArray()
+                            if (isPointInPolygon(offset.x, offset.y, xs, ys)) {
+                                return cell
+                            }
                         }
                     }
                 }
@@ -435,17 +438,23 @@ private fun BoardLayers(
         return steps
     }
 
+    val ratio = when {
+        board.topology != com.hoshiraflow.domain.model.BoardTopology.CUBE -> board.cols.toFloat() / board.rows
+        board.cubeBlocks > 1 -> 0.74f
+        else -> 1f
+    }
+
     Box(
         modifier = Modifier
             .padding(16.dp)
-            .aspectRatio(board.cols.toFloat() / board.rows.toFloat())
+            .aspectRatio(ratio)
             .fillMaxSize()
     ) {
         Canvas(modifier = Modifier.fillMaxSize().blur(18.dp)) {
             layoutWidth = size.width
             layoutHeight = size.height
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
-                val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height)
+                val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height, blocks = board.cubeBlocks)
                 cubeOriginX = layout.originX
                 cubeOriginY = layout.originY
                 cellWidthPx = layout.cellSize
@@ -553,7 +562,7 @@ private fun BoardLayers(
             layoutWidth = size.width
             layoutHeight = size.height
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
-                val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height)
+                val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height, blocks = board.cubeBlocks)
                 cubeOriginX = layout.originX
                 cubeOriginY = layout.originY
                 cellWidthPx = layout.cellSize
@@ -600,25 +609,28 @@ private fun DrawScope.drawGrid(
             com.hoshiraflow.domain.model.CubeFace.RIGHT to Color(0xFF232D3D)
         )
 
-        com.hoshiraflow.domain.model.CubeFace.entries.forEach { face ->
-            val faceColor = faceGradients[face] ?: Color(0xFF1E293B)
-            
-            for (u in 0 until board.rows) {
-                for (v in 0 until board.cols) {
-                    val poly = CubeProjection.getCellPolygon(face, u, v, cellSize, originX, originY)
-                    val path = Path().apply {
-                        poly.forEachIndexed { i, p ->
-                            if (i == 0) moveTo(p.first, p.second) else lineTo(p.first, p.second)
-                        }
-                        close()
-                    }
+        for (block in 0 until board.cubeBlocks) {
+            com.hoshiraflow.domain.model.CubeFace.entries.forEach { face ->
+                val faceColor = faceGradients[face] ?: Color(0xFF1E293B)
 
-                    drawPath(path, color = faceColor.copy(alpha = 0.9f))
-                    drawPath(
-                        path, 
-                        color = Color.White.copy(alpha = 0.2f), 
-                        style = Stroke(width = 1.8f)
-                    )
+                for (u in 0 until board.rows) {
+                    for (v in 0 until board.cols) {
+                        val cell = Cell(u, v, block * 3 + face.ordinal)
+                        val poly = CubeProjection.polygonOf(cell, board.rows, cellSize, originX, originY)
+                        val path = Path().apply {
+                            poly.forEachIndexed { i, p ->
+                                if (i == 0) moveTo(p.first, p.second) else lineTo(p.first, p.second)
+                            }
+                            close()
+                        }
+
+                        drawPath(path, color = faceColor.copy(alpha = 0.9f))
+                        drawPath(
+                            path,
+                            color = Color.White.copy(alpha = 0.2f),
+                            style = Stroke(width = 1.8f)
+                        )
+                    }
                 }
             }
         }
@@ -836,7 +848,7 @@ private fun DrawScope.drawPaths(
             val isPortalJump = when (board.topology) {
                 com.hoshiraflow.domain.model.BoardTopology.CUBE -> {
                     !(prevCell.isAdjacentTo(cell) ||
-                            com.hoshiraflow.domain.util.CubeEdgeMap.areAdjacent(prevCell, cell, board.rows))
+                            com.hoshiraflow.domain.util.CubeEdgeMap.areAdjacent(prevCell, cell, board.rows, board.cubeBlocks))
                 }
                 else -> !prevCell.isAdjacentTo(cell)
             }
@@ -870,7 +882,7 @@ private fun DrawScope.drawPaths(
             val center = cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
             
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE && !isPortalJump) {
-                val edgePoint = calculateCubeEdgeMidPoint(prevCell, cell, cellSize, cubeOriginX, cubeOriginY)
+                val edgePoint = calculateCubeEdgeMidPoint(prevCell, cell, board.rows, cellSize, cubeOriginX, cubeOriginY)
                 if (edgePoint != null) {
                     currentPath.lineTo(edgePoint.x, edgePoint.y)
                 }
@@ -1017,8 +1029,7 @@ private fun cellCenter(
     cubeOriginY: Float = 0f
 ): Offset {
     if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
-        val face = com.hoshiraflow.domain.model.CubeFace.entries[cell.z]
-        val pos = CubeProjection.cellToScreen(face, cell.row, cell.col, cellSize, cubeOriginX, cubeOriginY)
+        val pos = CubeProjection.centerOf(cell, board.rows, cellSize, cubeOriginX, cubeOriginY)
         return Offset(pos.first, pos.second)
     }
     return Offset(cell.col * cellWidth + cellWidth / 2f, cell.row * cellHeight + cellHeight / 2f)
@@ -1041,15 +1052,13 @@ private fun isPointInPolygon(px: Float, py: Float, polyX: FloatArray, polyY: Flo
 private fun calculateCubeEdgeMidPoint(
     from: Cell,
     to: Cell,
+    n: Int,
     cellSize: Float,
     originX: Float,
     originY: Float
 ): Offset? {
-    val fFace = com.hoshiraflow.domain.model.CubeFace.entries[from.z]
-    val tFace = com.hoshiraflow.domain.model.CubeFace.entries[to.z]
-
-    val fPoly = CubeProjection.getCellPolygon(fFace, from.row, from.col, cellSize, originX, originY)
-    val tPoly = CubeProjection.getCellPolygon(tFace, to.row, to.col, cellSize, originX, originY)
+    val fPoly = CubeProjection.polygonOf(from, n, cellSize, originX, originY)
+    val tPoly = CubeProjection.polygonOf(to, n, cellSize, originX, originY)
 
     val sharedPoints = mutableListOf<Pair<Float, Float>>()
     for (fp in fPoly) {

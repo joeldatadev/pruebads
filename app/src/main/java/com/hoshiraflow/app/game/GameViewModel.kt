@@ -208,6 +208,21 @@ class GameViewModel(
     }
 
 
+    // ==========================================
+    // HERRAMIENTAS DE DIAGNOSTICO
+    // ==========================================
+
+    fun loadDuoCube(levelId: Int, n: Int = 4) {
+        currentLevelId = null
+        currentDailyEpochDay = null
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching { com.hoshiraflow.domain.usecase.GenerateCubeLevelUseCase().invoke(seed = 777L, index = levelId, n = n, blocks = 2) }
+                .onSuccess { _uiState.value = GameUiState(isLoading = false, board = it); startTime = System.currentTimeMillis() }
+                .onFailure { _uiState.value = GameUiState(isLoading = false, errorMessage = it.message) }
+        }
+    }
+
     fun loadEmptyCube() {
         currentLevelId = null
         currentDailyEpochDay = null

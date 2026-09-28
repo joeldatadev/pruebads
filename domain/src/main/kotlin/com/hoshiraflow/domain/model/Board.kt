@@ -16,7 +16,8 @@ data class Board(
     // paths: mapa color -> lista ordenada de celdas que forman la línea actual
     val paths: Map<PuzzleColor, List<Cell>> = emptyMap(),
     val cellTypes: Map<Cell, CellType> = emptyMap(),
-    val topology: BoardTopology = BoardTopology.CARTESIAN
+    val topology: BoardTopology = BoardTopology.CARTESIAN,
+    val cubeBlocks: Int = 1
 ) {
 
     /**

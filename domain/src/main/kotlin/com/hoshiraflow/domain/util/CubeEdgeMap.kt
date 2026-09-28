@@ -61,13 +61,29 @@ object CubeEdgeMap {
     fun crossEdge(face: CubeFace, u: Int, v: Int, n: Int): Neighbor? =
         crossEdges(face, u, v, n).firstOrNull()
 
-    /**
-     * Verifica si dos celdas son adyacentes a través de una arista del cubo.
-     */
-    fun areAdjacent(a: Cell, b: Cell, n: Int): Boolean {
-        val faceA = try { CubeFace.entries[a.z] } catch (e: Exception) { return false }
-        return crossEdges(faceA, a.row, a.col, n).any {
-            it.face.ordinal == b.z && it.u == b.row && it.v == b.col
+    fun zOf(block: Int, face: CubeFace): Int = block * 3 + face.ordinal
+
+    /** Todos los vecinos de una celda (mismo bloque + unión en escalera entre bloques). */
+    fun neighborsOf(cell: Cell, n: Int, blocks: Int = 1): List<Cell> {
+        val block = cell.z / 3
+        if (block !in 0 until blocks) return emptyList()
+        val face = CubeFace.entries[cell.z % 3]
+
+        val result = crossEdges(face, cell.row, cell.col, n)
+            .map { Cell(it.u, it.v, zOf(block, it.face)) }
+            .toMutableList()
+
+        // RIGHT del bloque k -> TOP del bloque k+1
+        if (block + 1 < blocks && face == CubeFace.RIGHT && cell.col == n - 1) {
+            result += Cell(n - 1, cell.row, zOf(block + 1, CubeFace.TOP))
         }
+        // TOP del bloque k -> RIGHT del bloque k-1 (inversa)
+        if (block > 0 && face == CubeFace.TOP && cell.row == n - 1) {
+            result += Cell(cell.col, n - 1, zOf(block - 1, CubeFace.RIGHT))
+        }
+        return result
     }
+
+    fun areAdjacent(a: Cell, b: Cell, n: Int, blocks: Int = 1): Boolean =
+        b in neighborsOf(a, n, blocks)
 }

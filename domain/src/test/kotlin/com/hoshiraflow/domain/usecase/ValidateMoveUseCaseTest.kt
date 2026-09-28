@@ -17,10 +17,10 @@ class ValidateMoveUseCaseTest {
         rows = 3,
         cols = 3,
         nodes = listOf(
-            Node(Cell(0, 0), PuzzleColor.RED),
-            Node(Cell(2, 2), PuzzleColor.RED),
-            Node(Cell(0, 2), PuzzleColor.BLUE),
-            Node(Cell(2, 0), PuzzleColor.BLUE)
+            Node(Cell(0, 0), PuzzleColor.RED, pairId = 1),
+            Node(Cell(2, 2), PuzzleColor.RED, pairId = 1),
+            Node(Cell(0, 2), PuzzleColor.BLUE, pairId = 2),
+            Node(Cell(2, 0), PuzzleColor.BLUE, pairId = 2)
         ),
         paths = paths
     )

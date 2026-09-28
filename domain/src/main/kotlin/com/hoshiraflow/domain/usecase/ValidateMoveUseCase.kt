@@ -29,7 +29,7 @@ class ValidateMoveUseCase {
         }
 
         val isAdjacent = when (board.topology) {
-            BoardTopology.CUBE -> CubeEdgeMap.areAdjacent(lastCell, targetCell, board.rows)
+            BoardTopology.CUBE -> CubeEdgeMap.areAdjacent(lastCell, targetCell, board.rows, board.cubeBlocks)
                 || lastCell.isAdjacentTo(targetCell)
             else -> lastCell.isAdjacentTo(targetCell)
         }

@@ -1,5 +1,6 @@
 package com.hoshiraflow.domain.util
 
+import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.CubeFace
 
 /**
@@ -13,6 +14,19 @@ object CubeProjection {
     private const val COS_30 = 0.8660254f
     private const val SIN_30 = 0.5f
 
+    fun blockOrigin(block: Int, n: Int, cellSize: Float, originX: Float, originY: Float) =
+        (originX + block * n * COS_30 * cellSize) to (originY + block * n * 1.5f * cellSize)
+
+    fun polygonOf(cell: Cell, n: Int, cellSize: Float, originX: Float, originY: Float): List<Pair<Float, Float>> {
+        val (bx, by) = blockOrigin(cell.z / 3, n, cellSize, originX, originY)
+        return getCellPolygon(CubeFace.entries[cell.z % 3], cell.row, cell.col, cellSize, bx, by)
+    }
+
+    fun centerOf(cell: Cell, n: Int, cellSize: Float, originX: Float, originY: Float): Pair<Float, Float> {
+        val (bx, by) = blockOrigin(cell.z / 3, n, cellSize, originX, originY)
+        return cellToScreen(CubeFace.entries[cell.z % 3], cell.row, cell.col, cellSize, bx, by)
+    }
+
     /** Resultado de encajar un cubo de n x n x n dentro de un área disponible. */
     data class CubeLayout(val originX: Float, val originY: Float, val cellSize: Float)
 
@@ -25,7 +39,8 @@ object CubeProjection {
         n: Int,
         availableWidth: Float,
         availableHeight: Float,
-        marginFraction: Float = 0.08f
+        marginFraction: Float = 0.08f,
+        blocks: Int = 1
     ): CubeLayout {
         if (n <= 0 || availableWidth <= 0f || availableHeight <= 0f) {
             return CubeLayout(availableWidth / 2f, availableHeight / 2f, 0f)
@@ -36,15 +51,13 @@ object CubeProjection {
         var minY = Float.MAX_VALUE
         var maxY = -Float.MAX_VALUE
 
-        for (face in CubeFace.entries) {
-            for (u in 0 until n) {
-                for (v in 0 until n) {
-                    getCellPolygon(face, u, v, cellSize = 1f, originX = 0f, originY = 0f).forEach { (x, y) ->
-                        if (x < minX) minX = x
-                        if (x > maxX) maxX = x
-                        if (y < minY) minY = y
-                        if (y > maxY) maxY = y
-                    }
+        for (block in 0 until blocks) {
+            val offX = block * n * COS_30
+            val offY = block * n * 1.5f
+            for (face in CubeFace.entries) for (u in 0 until n) for (v in 0 until n) {
+                getCellPolygon(face, u, v, 1f, offX, offY).forEach { (x, y) ->
+                    if (x < minX) minX = x; if (x > maxX) maxX = x
+                    if (y < minY) minY = y; if (y > maxY) maxY = y
                 }
             }
         }
