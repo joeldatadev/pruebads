@@ -1,6 +1,7 @@
 package com.hoshiraflow.domain.usecase
 
 import com.hoshiraflow.domain.model.Board
+import com.hoshiraflow.domain.model.BoardTopology
 import com.hoshiraflow.domain.model.CellType
 import com.hoshiraflow.domain.model.PuzzleColor
 
@@ -38,9 +39,10 @@ class CheckLevelCompleteUseCase {
         val nonPlayableCount = board.cellTypes.values.count { it == CellType.Blocked || it == CellType.Void }
         
         // En CARTESIAN (2D), cellTypes solo contiene casillas con propiedades especiales.
-        // En CUBE (3 caras), cellTypes contiene todas las coordenadas.
+        // En CUBE (3 caras) y SURFACE (voxels arbitrarios), cellTypes contiene TODAS
+        // las coordenadas jugables (una entrada por cada cara visible del modelo).
         val totalArea = when (board.topology) {
-            com.hoshiraflow.domain.model.BoardTopology.CUBE -> board.cellTypes.size
+            BoardTopology.CUBE, BoardTopology.SURFACE -> board.cellTypes.size
             else -> board.totalCells()
         }
         

@@ -11,6 +11,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
+import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.FaceDir
 import com.hoshiraflow.domain.model.SurfaceModel
@@ -21,7 +23,7 @@ class SurfaceGeometry(val model: SurfaceModel, width: Float, height: Float) {
     val layout = SurfaceProjection.fit(model, width, height)
     val cellSize get() = layout.cellSize
 
-    private val polys = model.faces.map {
+    val polys = model.faces.map {
         SurfaceProjection.polygon(it, layout.cellSize, layout.originX, layout.originY)
     }
 
@@ -36,23 +38,55 @@ class SurfaceGeometry(val model: SurfaceModel, width: Float, height: Float) {
         f.toCell() to Offset(polys[i].map { it.first }.average().toFloat(), polys[i].map { it.second }.average().toFloat())
     }.toMap()
 
-    /** Las caras visibles no se solapan en pantalla, así que el orden no importa. */
+    /** Búsqueda de frente a atrás para dar prioridad a las caras frontales visibles. */
     fun hit(p: Offset): Cell? {
-        for (i in polys.indices) if (inside(polys[i], p)) return model.faces[i].toCell()
-        return null
+        for (i in polys.indices.reversed()) {
+            if (inside(polys[i], p)) return model.faces[i].toCell()
+        }
+
+        // Tolerancia secundaria para gestos rápidos en proximidad al centroide
+        val thresholdSq = (cellSize * 0.55f) * (cellSize * 0.55f)
+        var closestCell: Cell? = null
+        var minDistSq = Float.MAX_VALUE
+        for (i in polys.indices.reversed()) {
+            val cell = model.faces[i].toCell()
+            val center = centers[cell] ?: continue
+            val dx = p.x - center.x
+            val dy = p.y - center.y
+            val distSq = dx * dx + dy * dy
+            if (distSq <= thresholdSq && distSq < minDistSq) {
+                minDistSq = distSq
+                closestCell = cell
+            }
+        }
+        return closestCell
     }
 
-    fun DrawScope.drawSurface() {
-        val edge = Color(0xFF3A4360)
+    fun DrawScope.drawSurface(board: Board? = null) {
+        val strokeColor = Color.White.copy(alpha = 0.35f)
+        val centerDotColor = Color.White.copy(alpha = 0.25f)
+
         model.faces.forEachIndexed { i, f ->
-            // 3 tonos = volumen sin ruido visual; la luz "cae" desde arriba.
+            val cell = f.toCell()
             val fill = when (f.dir) {
-                FaceDir.TOP -> Color(0xFF2A3145)
-                FaceDir.RIGHT -> Color(0xFF1E2436)
-                FaceDir.LEFT -> Color(0xFF151A28)
+                FaceDir.TOP -> Color(0xFF2E3B4E)
+                FaceDir.RIGHT -> Color(0xFF232D3D)
+                FaceDir.LEFT -> Color(0xFF1A222F)
             }
             drawPath(paths[i], fill)
-            drawPath(paths[i], edge, style = Stroke(width = 1.5f))
+            drawPath(paths[i], strokeColor, style = Stroke(width = 2.dp.toPx()))
+
+            // Guía discreta en el centroide de casillas vacías para definir bien la cuadrícula 3D
+            val hasNode = board?.nodes?.any { it.cell == cell } == true
+            if (!hasNode) {
+                centers[cell]?.let { center ->
+                    drawCircle(
+                        color = centerDotColor,
+                        radius = (cellSize * 0.08f).coerceIn(2.5f.dp.toPx(), 4.5f.dp.toPx()),
+                        center = center
+                    )
+                }
+            }
         }
     }
 

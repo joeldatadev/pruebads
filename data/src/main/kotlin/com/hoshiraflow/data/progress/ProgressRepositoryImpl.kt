@@ -14,6 +14,8 @@ class ProgressRepositoryImpl(
 
     override fun observeCompletedCubeLevels(): Flow<Set<Int>> = dataStore.observeCompletedCubeLevels()
 
+    override fun observeCompletedSurfaceLevels(): Flow<Set<String>> = dataStore.observeCompletedSurfaceLevels()
+
     override suspend fun markLevelCompleted(levelId: Int) {
         dataStore.addCompletedLevel(levelId)
     }
@@ -21,7 +23,8 @@ class ProgressRepositoryImpl(
     override suspend fun markCubeLevelCompleted(levelId: Int) {
         dataStore.addCompletedCubeLevel(levelId)
     }
+
+    override suspend fun markSurfaceLevelCompleted(key: String) {
+        dataStore.addCompletedSurfaceLevel(key)
+    }
 }
-
-
-

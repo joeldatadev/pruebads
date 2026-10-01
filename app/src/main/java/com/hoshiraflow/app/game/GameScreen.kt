@@ -52,8 +52,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +65,8 @@ import com.hoshiraflow.domain.model.Board
 import com.hoshiraflow.domain.model.Cell
 import com.hoshiraflow.domain.model.CellType
 import com.hoshiraflow.domain.model.PuzzleColor
+import com.hoshiraflow.domain.model.SurfaceFace
+import com.hoshiraflow.domain.model.SurfaceProjection
 import com.hoshiraflow.domain.util.CubeProjection
 import com.hoshiraflow.domain.repository.DailyChallengeRepository
 import com.hoshiraflow.domain.repository.GameSettings
@@ -89,6 +93,7 @@ fun GameScreen(
     masterShape: com.hoshiraflow.domain.model.BoardShape? = null,
     isCubeCampaign: Boolean = false,
     isEmptyCube: Boolean = false,
+    surfaceShapeIndex: Int? = null,
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
     onLevelRestarted: () -> Unit = {},
@@ -96,7 +101,7 @@ fun GameScreen(
     modifier: Modifier = Modifier
 ) {
     val viewModel: GameViewModel = viewModel(
-        key = "level=$levelId-infinite=$infiniteSeed-daily=$dailyEpochDay-portal=$portalSeed-switch=$switchSeed-master=$masterSeed-ishape=$infiniteShape-pshape=$portalShape-sshape=$switchShape-mshape=$masterShape",
+        key = "level=$levelId-infinite=$infiniteSeed-daily=$dailyEpochDay-portal=$portalSeed-switch=$switchSeed-master=$masterSeed-surface=$surfaceShapeIndex-ishape=$infiniteShape-pshape=$portalShape-sshape=$switchShape-mshape=$masterShape",
         factory = GameViewModelFactory(levelRepository, progressRepository, dailyChallengeRepository)
     )
     val uiState by viewModel.uiState.collectAsState()
@@ -111,7 +116,7 @@ fun GameScreen(
         hapticController.enabled = settings.hapticsEnabled
     }
 
-    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isCubeCampaign, isEmptyCube) {
+    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isCubeCampaign, isEmptyCube, surfaceShapeIndex) {
         val selectedShape: com.hoshiraflow.domain.model.BoardShape? = when {
             infiniteSeed != null -> infiniteShape
             portalSeed != null -> portalShape
@@ -121,6 +126,7 @@ fun GameScreen(
         }
         when {
             dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
+            surfaceShapeIndex != null -> viewModel.loadSurfaceLevel(surfaceShapeIndex, levelId)
             isEmptyCube -> viewModel.loadDuoCube(levelId)
             isCubeCampaign -> viewModel.loadCubeLevel(levelId)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed, selectedShape)
@@ -357,7 +363,20 @@ private fun BoardLayers(
     var layoutWidth by remember { mutableFloatStateOf(0f) }
     var layoutHeight by remember { mutableFloatStateOf(0f) }
 
+    // Superficies (pirámide/escalera/zigzag/torre): layout y hit-test delegados a
+    // SurfaceGeometry, construido una sola vez por (modelo, tamaño del box).
+    var boardBoxSize by remember { mutableStateOf(IntSize.Zero) }
+    val surfaceGeometry = remember(board.surface, boardBoxSize) {
+        val model = board.surface
+        if (model != null && boardBoxSize.width > 0 && boardBoxSize.height > 0) {
+            SurfaceGeometry(model, boardBoxSize.width.toFloat(), boardBoxSize.height.toFloat())
+        } else null
+    }
+
     fun offsetToCell(offset: Offset): Cell? {
+        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+            return surfaceGeometry?.hit(offset)
+        }
         if (layoutWidth <= 0f || layoutHeight <= 0f) return null
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
             val originX = cubeOriginX
@@ -390,6 +409,9 @@ private fun BoardLayers(
     }
 
     fun offsetToCellClamped(offset: Offset): Cell? {
+        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+            return offsetToCell(offset)
+        }
         if (layoutWidth <= 0f || layoutHeight <= 0f) return null
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
             return offsetToCell(offset)
@@ -407,6 +429,17 @@ private fun BoardLayers(
 
     fun crossedCellsFrom(startCell: Cell, targetCell: Cell): List<Cell> {
         if (startCell == targetCell) return emptyList()
+
+        if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+            val surface = board.surface ?: return emptyList()
+            return if (surface.isAdjacent(startCell, targetCell)) {
+                listOf(targetCell)
+            } else {
+                // El dedo saltó varias caras en un solo evento de drag: rellena con el
+                // camino más corto entre caras (BFS corto, igual que un salto de portal).
+                surface.pathBetween(startCell, targetCell, maxLen = 4)
+            }
+        }
 
         if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
             if (startCell.z != targetCell.z) {
@@ -438,7 +471,11 @@ private fun BoardLayers(
         return steps
     }
 
-    val ratio = when {
+    // Las superficies (pirámide, escalera, zigzag, torre...) varían mucho de forma,
+    // así que no fuerzan una proporción fija: SurfaceProjection.fit() ya encaja el
+    // modelo completo dentro de cualquier ancho/alto disponible sin recortar caras.
+    val ratio: Float? = when {
+        board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE -> null
         board.topology != com.hoshiraflow.domain.model.BoardTopology.CUBE -> board.cols.toFloat() / board.rows
         board.cubeBlocks > 1 -> 0.74f
         else -> 1f
@@ -447,13 +484,18 @@ private fun BoardLayers(
     Box(
         modifier = Modifier
             .padding(16.dp)
-            .aspectRatio(ratio)
+            .let { m -> if (ratio != null) m.aspectRatio(ratio) else m }
             .fillMaxSize()
+            .onSizeChanged { boardBoxSize = it }
     ) {
         Canvas(modifier = Modifier.fillMaxSize().blur(18.dp)) {
             layoutWidth = size.width
             layoutHeight = size.height
-            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+                cellSizePx = surfaceGeometry?.cellSize ?: 0f
+                cellWidthPx = cellSizePx
+                cellHeightPx = cellSizePx
+            } else if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
                 val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height, blocks = board.cubeBlocks)
                 cubeOriginX = layout.originX
                 cubeOriginY = layout.originY
@@ -465,7 +507,7 @@ private fun BoardLayers(
                 cellHeightPx = size.height / board.height
                 cellSizePx = kotlin.math.min(cellWidthPx, cellHeightPx)
             }
-            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = true, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = true, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
         }
 
         Canvas(
@@ -561,7 +603,11 @@ private fun BoardLayers(
         ) {
             layoutWidth = size.width
             layoutHeight = size.height
-            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
+            if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+                cellSizePx = surfaceGeometry?.cellSize ?: 0f
+                cellWidthPx = cellSizePx
+                cellHeightPx = cellSizePx
+            } else if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
                 val layout = CubeProjection.fitCubeToArea(board.rows, size.width, size.height, blocks = board.cubeBlocks)
                 cubeOriginX = layout.originX
                 cubeOriginY = layout.originY
@@ -574,10 +620,10 @@ private fun BoardLayers(
                 cellSizePx = kotlin.math.min(cellWidthPx, cellHeightPx)
             }
 
-            drawGrid(board, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
-            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = false, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
-            drawNodes(board, connectedColors, nodeScales, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
-            drawParticles(particles, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight)
+            drawGrid(board, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
+            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = false, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
+            drawNodes(board, connectedColors, nodeScales, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
+            drawParticles(particles, board, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, surfaceGeometry)
             if (rippleProgress in 0f..1f && rippleProgress > 0f) {
                 drawRipple(board, cellWidthPx, cellHeightPx, cellSizePx, rippleProgress)
             }
@@ -593,11 +639,17 @@ private fun DrawScope.drawGrid(
     layoutWidth: Float,
     layoutHeight: Float,
     cubeOriginX: Float = 0f,
-    cubeOriginY: Float = 0f
+    cubeOriginY: Float = 0f,
+    surfaceGeometry: SurfaceGeometry? = null
 ) {
     val gridColor = Color(0xFF2A2A2A)
     val blockedBgColor = Color(0xFF1E293B)
     val voidBgColor = Color(0xFF0F172A)
+
+    if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+        surfaceGeometry?.let { geometry -> with(geometry) { drawSurface(board) } }
+        return
+    }
 
     if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
         val originX = cubeOriginX
@@ -817,7 +869,8 @@ private fun DrawScope.drawPaths(
     layoutWidth: Float,
     layoutHeight: Float,
     cubeOriginX: Float = 0f,
-    cubeOriginY: Float = 0f
+    cubeOriginY: Float = 0f,
+    surfaceGeometry: SurfaceGeometry? = null
 ) {
     var pathCount = 0
     board.paths.forEach { (color, cells) ->
@@ -835,7 +888,7 @@ private fun DrawScope.drawPaths(
 
         var pathHasPoints = false
         if (cells.isNotEmpty()) {
-            val center = cellCenter(cells[0], cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+            val center = cellCenter(cells[0], cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
             currentPath.moveTo(center.x, center.y)
             pathHasPoints = true
         }
@@ -849,6 +902,9 @@ private fun DrawScope.drawPaths(
                 com.hoshiraflow.domain.model.BoardTopology.CUBE -> {
                     !(prevCell.isAdjacentTo(cell) ||
                             com.hoshiraflow.domain.util.CubeEdgeMap.areAdjacent(prevCell, cell, board.rows, board.cubeBlocks))
+                }
+                com.hoshiraflow.domain.model.BoardTopology.SURFACE -> {
+                    !(board.surface?.isAdjacent(prevCell, cell) == true)
                 }
                 else -> !prevCell.isAdjacentTo(cell)
             }
@@ -870,19 +926,24 @@ private fun DrawScope.drawPaths(
                 currentPath.rewind()
 
                 val startCenter = if (isPortalJump) {
-                    cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+                    cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
                 } else {
-                    cellCenter(prevCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+                    cellCenter(prevCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
                 }
 
                 currentPath.moveTo(startCenter.x, startCenter.y)
                 pathColor = currentColor
             }
 
-            val center = cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+            val center = cellCenter(cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
             
             if (board.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE && !isPortalJump) {
                 val edgePoint = calculateCubeEdgeMidPoint(prevCell, cell, board.rows, cellSize, cubeOriginX, cubeOriginY)
+                if (edgePoint != null) {
+                    currentPath.lineTo(edgePoint.x, edgePoint.y)
+                }
+            } else if (board.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE && !isPortalJump && surfaceGeometry != null) {
+                val edgePoint = calculateSurfaceEdgeMidPoint(prevCell, cell, surfaceGeometry)
                 if (edgePoint != null) {
                     currentPath.lineTo(edgePoint.x, edgePoint.y)
                 }
@@ -915,12 +976,12 @@ private fun DrawScope.drawPaths(
 
                 currentPath = pathMap.getOrPut(pathCount++) { Path() }
                 currentPath.rewind()
-                val lastCenter = cellCenter(lastCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+                val lastCenter = cellCenter(lastCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
                 currentPath.moveTo(lastCenter.x, lastCenter.y)
                 pathColor = currentColor
             }
 
-            val lastCenter = cellCenter(lastCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+            val lastCenter = cellCenter(lastCell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
             val dx = dragPosition!!.x - lastCenter.x
             val dy = dragPosition.y - lastCenter.y
 
@@ -963,10 +1024,11 @@ private fun DrawScope.drawNodes(
     layoutWidth: Float,
     layoutHeight: Float,
     cubeOriginX: Float = 0f,
-    cubeOriginY: Float = 0f
+    cubeOriginY: Float = 0f,
+    surfaceGeometry: SurfaceGeometry? = null
 ) {
     board.nodes.forEach { node ->
-        val center = cellCenter(node.cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY)
+        val center = cellCenter(node.cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
         val baseRadius = if (node.color in connectedColors) cellSize * 0.38f else cellSize * 0.32f
         val scale = nodeScales[node.cell]?.value ?: 1f
         drawCircle(color = node.color.toComposeColor(), radius = baseRadius * scale, center = center)
@@ -975,17 +1037,19 @@ private fun DrawScope.drawNodes(
 
 private fun DrawScope.drawParticles(
     particles: List<ParticleBurst>,
+    board: Board?,
     cellWidth: Float,
     cellHeight: Float,
     cellSize: Float,
     layoutWidth: Float,
-    layoutHeight: Float
+    layoutHeight: Float,
+    surfaceGeometry: SurfaceGeometry? = null
 ) {
     val particleCount = 8
     particles.forEach { burst ->
         val progress = burst.progress.value
         if (progress <= 0f) return@forEach
-        val center = cellCenter(burst.cell, cellWidth, cellHeight, cellSize, null, layoutWidth, layoutHeight)
+        val center = cellCenter(burst.cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, surfaceGeometry = surfaceGeometry)
         val color = burst.color.toComposeColor().copy(alpha = (1f - progress).coerceIn(0f, 1f))
         val travelDistance = cellSize * 0.9f * progress
         val particleRadius = cellSize * 0.06f * (1f - progress * 0.5f)
@@ -1026,8 +1090,12 @@ private fun cellCenter(
     layoutWidth: Float,
     layoutHeight: Float,
     cubeOriginX: Float = 0f,
-    cubeOriginY: Float = 0f
+    cubeOriginY: Float = 0f,
+    surfaceGeometry: SurfaceGeometry? = null
 ): Offset {
+    if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.SURFACE) {
+        return surfaceGeometry?.centers?.get(cell) ?: Offset.Zero
+    }
     if (board?.topology == com.hoshiraflow.domain.model.BoardTopology.CUBE) {
         val pos = CubeProjection.centerOf(cell, board.rows, cellSize, cubeOriginX, cubeOriginY)
         return Offset(pos.first, pos.second)
@@ -1047,6 +1115,34 @@ private fun isPointInPolygon(px: Float, py: Float, polyX: FloatArray, polyY: Flo
         }
     }
     return collision
+}
+
+private fun calculateSurfaceEdgeMidPoint(
+    from: Cell,
+    to: Cell,
+    geometry: SurfaceGeometry
+): Offset? {
+    val layout = geometry.layout
+    val fPoly = SurfaceProjection.polygon(SurfaceFace.fromCell(from), layout.cellSize, layout.originX, layout.originY)
+    val tPoly = SurfaceProjection.polygon(SurfaceFace.fromCell(to), layout.cellSize, layout.originX, layout.originY)
+
+    val sharedPoints = mutableListOf<Pair<Float, Float>>()
+    for (fp in fPoly) {
+        for (tp in tPoly) {
+            val dx = fp.first - tp.first
+            val dy = fp.second - tp.second
+            if (kotlin.math.hypot(dx, dy) < 1.0f) {
+                sharedPoints.add(fp)
+            }
+        }
+    }
+
+    if (sharedPoints.size >= 2) {
+        val mx = (sharedPoints[0].first + sharedPoints[1].first) / 2f
+        val my = (sharedPoints[0].second + sharedPoints[1].second) / 2f
+        return Offset(mx, my)
+    }
+    return null
 }
 
 private fun calculateCubeEdgeMidPoint(

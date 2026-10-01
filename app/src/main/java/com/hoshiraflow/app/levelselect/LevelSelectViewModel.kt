@@ -36,13 +36,15 @@ class LevelSelectViewModel(
             runCatching { 
                 val campaignTotal = levelRepository.getTotalLevels()
                 val cubeTotal = levelRepository.getTotalCubeLevels()
-                Pair(campaignTotal, cubeTotal)
+                val surfaceTotal = levelRepository.getTotalSurfaceLevels()
+                Triple(campaignTotal, cubeTotal, surfaceTotal)
             }
-                .onSuccess { (total, cubeTotal) -> 
+                .onSuccess { (total, cubeTotal, surfaceTotal) -> 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false, 
                         totalLevels = total,
-                        totalCubeLevels = cubeTotal
+                        totalCubeLevels = cubeTotal,
+                        totalSurfaceLevels = surfaceTotal
                     ) 
                 }
                 .onFailure { e -> _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = e.message) }
@@ -58,6 +60,11 @@ class LevelSelectViewModel(
         viewModelScope.launch {
             progressRepository.observeCompletedCubeLevels().collect { completed ->
                 _uiState.value = _uiState.value.copy(completedCubeLevels = completed)
+            }
+        }
+        viewModelScope.launch {
+            progressRepository.observeCompletedSurfaceLevels().collect { completed ->
+                _uiState.value = _uiState.value.copy(completedSurfaceLevels = completed)
             }
         }
     }
@@ -110,6 +117,3 @@ class LevelSelectViewModel(
         countdownJob?.cancel()
     }
 }
-
-
-

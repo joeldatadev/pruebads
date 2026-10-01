@@ -50,11 +50,13 @@ class GameViewModel(
 
     private var currentLevelId: Int? = null
     private var currentDailyEpochDay: Long? = null
+    private var currentSurfaceKey: String? = null
     private var startTime: Long = 0
 
     fun loadLevel(levelId: Int) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching { levelRepository.getLevel(levelId) }
@@ -75,6 +77,7 @@ class GameViewModel(
     fun loadCubeLevel(levelId: Int) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching { levelRepository.getCubeLevel(levelId) }
@@ -94,6 +97,7 @@ class GameViewModel(
     fun loadDailyChallenge(epochDay: Long) {
         currentLevelId = null
         currentDailyEpochDay = epochDay
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -111,9 +115,27 @@ class GameViewModel(
         }
     }
 
+    fun loadSurfaceLevel(shapeIndex: Int, levelId: Int) {
+        currentLevelId = null
+        currentDailyEpochDay = null
+        currentSurfaceKey = "${shapeIndex}_$levelId"
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching { levelRepository.getSurfaceLevel(shapeIndex, levelId) }
+                .onSuccess { board ->
+                    _uiState.value = GameUiState(isLoading = false, board = board)
+                    startTime = System.currentTimeMillis()
+                }
+                .onFailure { e ->
+                    _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+                }
+        }
+    }
+
     fun loadInfiniteLevel(levelId: Int, seed: Long, shape: com.hoshiraflow.domain.model.BoardShape? = null) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -134,6 +156,7 @@ class GameViewModel(
     fun loadChallengeLevel(levelId: Int, seed: Long) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -153,6 +176,7 @@ class GameViewModel(
     fun loadPortalLevel(levelId: Int, seed: Long = System.currentTimeMillis(), shape: com.hoshiraflow.domain.model.BoardShape? = null) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -172,6 +196,7 @@ class GameViewModel(
     fun loadSwitchLevel(levelId: Int, seed: Long = System.currentTimeMillis(), shape: com.hoshiraflow.domain.model.BoardShape? = null) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -191,6 +216,7 @@ class GameViewModel(
     fun loadMasterLevel(levelId: Int, seed: Long = System.currentTimeMillis(), shape: com.hoshiraflow.domain.model.BoardShape? = null) {
         currentLevelId = levelId
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -215,6 +241,7 @@ class GameViewModel(
     fun loadDuoCube(levelId: Int, n: Int = 4) {
         currentLevelId = null
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching { com.hoshiraflow.domain.usecase.GenerateCubeLevelUseCase().invoke(seed = 777L, index = levelId, n = n, blocks = 2) }
@@ -226,6 +253,7 @@ class GameViewModel(
     fun loadEmptyCube() {
         currentLevelId = null
         currentDailyEpochDay = null
+        currentSurfaceKey = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -385,6 +413,7 @@ class GameViewModel(
                     }
                 }
                 currentDailyEpochDay?.let { dailyChallengeRepository.markCompleted(it) }
+                currentSurfaceKey?.let { progressRepository.markSurfaceLevelCompleted(it) }
             }
         } else {
             _uiState.value = _uiState.value.copy(connectedColors = newConnectedColors)

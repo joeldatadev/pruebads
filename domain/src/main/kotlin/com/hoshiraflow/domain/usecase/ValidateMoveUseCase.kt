@@ -31,6 +31,10 @@ class ValidateMoveUseCase {
         val isAdjacent = when (board.topology) {
             BoardTopology.CUBE -> CubeEdgeMap.areAdjacent(lastCell, targetCell, board.rows, board.cubeBlocks)
                 || lastCell.isAdjacentTo(targetCell)
+            // FIX: antes no había rama SURFACE, así que caía en el `else` de abajo
+            // (isAdjacentTo cartesiano) y CUALQUIER movimiento entre dos caras de la
+            // superficie se rechazaba como inválido -> el trazo no avanzaba nunca.
+            BoardTopology.SURFACE -> board.surface?.isAdjacent(lastCell, targetCell) == true
             else -> lastCell.isAdjacentTo(targetCell)
         }
 
@@ -83,5 +87,3 @@ class ValidateMoveUseCase {
         return Result.Extend(currentPath + targetCell)
     }
 }
-
-

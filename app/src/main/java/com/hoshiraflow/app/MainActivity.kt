@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import com.hoshiraflow.app.levelselect.LevelSelectionScreen
+import com.hoshiraflow.app.levelselect.SurfaceLevelSelectionScreen
 import com.hoshiraflow.app.mainmenu.MainMenuScreen
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.ads.MobileAds
@@ -57,6 +58,8 @@ private sealed class Screen {
     object EmptyCube : Screen()
     object Daily : Screen()
     object Settings : Screen()
+    object SurfaceLevelSelection : Screen()
+    data class SurfaceCampaign(val shapeIndex: Int, val levelId: Int) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -291,6 +294,35 @@ class MainActivity : ComponentActivity() {
                                         onBack = { screen = Screen.MainMenu }
                                     )
                                 }
+                                Screen.SurfaceLevelSelection -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    SurfaceLevelSelectionScreen(
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        onLevelSelected = { shapeIndex, levelId ->
+                                            screen = Screen.SurfaceCampaign(shapeIndex, levelId)
+                                        },
+                                        onBack = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                is Screen.SurfaceCampaign -> {
+                                    BackHandler { screen = Screen.SurfaceLevelSelection }
+                                    GameScreen(
+                                        levelId = current.levelId,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
+                                        surfaceShapeIndex = current.shapeIndex,
+                                        onNextLevel = {
+                                            screen = Screen.SurfaceCampaign(current.shapeIndex, current.levelId + 1)
+                                        },
+                                        onBackToLevelSelect = { screen = Screen.SurfaceLevelSelection },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
+                                    )
+                                }
                                 Screen.MainMenu -> MainMenuScreen(
                                     levelRepository = levelRepository,
                                     progressRepository = progressRepository,
@@ -311,7 +343,7 @@ class MainActivity : ComponentActivity() {
                                         screen = Screen.Master(index = 1, seed = System.currentTimeMillis(), shape = shape)
                                     },
                                     onCubeModeSelected = { screen = Screen.CubeLevelSelection },
-                                    onEmptyCubeSelected = { screen = Screen.EmptyCube }
+                                    onEmptyCubeSelected = { screen = Screen.SurfaceLevelSelection }
                                 )
                             }
                         }
@@ -323,6 +355,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-
-

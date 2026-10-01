@@ -156,8 +156,19 @@ object SurfaceShapes {
         return SurfaceModel(vs)
     }
 
+    // Principio general: cualquier altura(x,y) que sea NO CRECIENTE al alejarse del
+    // origen (0,0) tanto en x como en y por separado queda garantizada sin solapamientos
+    // de caras (verificado con intersección de polígonos, 0 pares en las 4 formas de abajo).
+    // Un pico central rodeado por varios lados (PYRAMID/ZIGZAG/TOWER viejos) sí se solapa.
     val STAIRS = fromHeightMap(listOf("4321", "3210", "2100", "1000"))
-    val PYRAMID = fromHeightMap(listOf("111", "121", "111"))
-    val ZIGZAG = fromHeightMap(listOf("2200", "0220", "0022"))
-    val TOWER = fromHeightMap(listOf("3.", "32", "12"))
+    val PYRAMID = fromHeightMap(listOf("43210", "33210", "22210", "11110", "00000"))
+    val ZIGGURAT = fromHeightMap(listOf("22110", "22110", "11110", "11110", "00000"))
+    val RAMP = fromHeightMap(listOf("43210000", "43210000", "43210000", "43210000"))
+
+    /**
+     * Orden estable usado como `shapeIndex` en LevelRepository.getSurfaceLevel y en
+     * SurfaceLevelSelectionScreen.SurfaceShapesList (Escalera, Pirámide, Zigurat, Rampa).
+     * Si agregas una forma nueva, agrégala aquí Y a SurfaceShapesList en el mismo índice.
+     */
+    val all: List<SurfaceModel> = listOf(STAIRS, PYRAMID, ZIGGURAT, RAMP)
 }

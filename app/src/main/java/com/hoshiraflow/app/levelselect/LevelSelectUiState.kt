@@ -16,8 +16,7 @@ data class LevelSelectUiState(
     val dailyChallengeCountdown: String = "",
     val completedCubeLevels: Set<Int> = emptySet(),
     val totalCubeLevels: Int = 0,
+    val completedSurfaceLevels: Set<String> = emptySet(),
+    val totalSurfaceLevels: Int = 0,
     val errorMessage: String? = null
 )
-
-
-

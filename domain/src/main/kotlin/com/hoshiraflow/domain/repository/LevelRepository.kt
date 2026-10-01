@@ -10,7 +10,8 @@ interface LevelRepository {
     suspend fun getCubeLevel(levelId: Int): Board
     suspend fun getTotalLevels(): Int
     suspend fun getTotalCubeLevels(): Int
+
+    /** shapeIndex referencia SurfaceShapes.all (0=Pirámide, 1=Escalera, 2=Zigzag, 3=Torre; mismo orden que SurfaceShapesList en la UI). */
+    suspend fun getSurfaceLevel(shapeIndex: Int, levelId: Int): Board
+    suspend fun getTotalSurfaceLevels(): Int
 }
-
-
-

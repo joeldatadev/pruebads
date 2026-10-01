@@ -17,7 +17,10 @@ data class Board(
     val paths: Map<PuzzleColor, List<Cell>> = emptyMap(),
     val cellTypes: Map<Cell, CellType> = emptyMap(),
     val topology: BoardTopology = BoardTopology.CARTESIAN,
-    val cubeBlocks: Int = 1
+    /** Solo relevante para topology == CUBE: cuántos bloques de cubo encadenados hay. */
+    val cubeBlocks: Int = 1,
+    /** Solo relevante para topology == SURFACE: el modelo de voxels/caras/adyacencias. */
+    val surface: SurfaceModel? = null
 ) {
 
     /**
