@@ -5,6 +5,7 @@ package com.hoshiraflow.data.progress
  */
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +52,19 @@ class ProgressDataStore(private val context: Context) {
         context.progressDataStore.edit { prefs ->
             val current = prefs[completedSurfaceLevelsKey] ?: emptySet()
             prefs[completedSurfaceLevelsKey] = current + key
+        }
+    }
+
+    fun observeTimedBestScore(key: String): Flow<Int> {
+        val prefKey = intPreferencesKey("timed_best_$key")
+        return context.progressDataStore.data.map { prefs -> prefs[prefKey] ?: 0 }
+    }
+
+    suspend fun saveTimedBestScoreIfHigher(key: String, score: Int) {
+        val prefKey = intPreferencesKey("timed_best_$key")
+        context.progressDataStore.edit { prefs ->
+            val current = prefs[prefKey] ?: 0
+            if (score > current) prefs[prefKey] = score
         }
     }
 }

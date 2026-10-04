@@ -18,6 +18,9 @@ import com.hoshiraflow.domain.usecase.GenerateProceduralLevelUseCase
 import com.hoshiraflow.domain.usecase.GenerateSwitchLevelUseCase
 import com.hoshiraflow.domain.usecase.GetDailyChallengeSeedUseCase
 import com.hoshiraflow.domain.usecase.ValidateMoveUseCase
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -48,15 +51,25 @@ class GameViewModel(
     private val validateMove = ValidateMoveUseCase()
     private val checkComplete = CheckLevelCompleteUseCase()
 
+    private val generateTimedLevel = com.hoshiraflow.domain.usecase.GenerateTimedLevelUseCase()
+
     private var currentLevelId: Int? = null
     private var currentDailyEpochDay: Long? = null
     private var currentSurfaceKey: String? = null
     private var startTime: Long = 0
 
+    private var timedType: com.hoshiraflow.domain.model.TimedModeType? = null
+    private var timedRandom: kotlin.random.Random = kotlin.random.Random.Default
+    private var timedElapsedSeconds: Int = 0
+    private var timedCapMs: Long = 0L
+    private var timedJob: Job? = null
+
     fun loadLevel(levelId: Int) {
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching { levelRepository.getLevel(levelId) }
@@ -78,6 +91,8 @@ class GameViewModel(
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching { levelRepository.getCubeLevel(levelId) }
@@ -98,6 +113,8 @@ class GameViewModel(
         currentLevelId = null
         currentDailyEpochDay = epochDay
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -132,10 +149,51 @@ class GameViewModel(
         }
     }
 
+    /**
+     * Modo Infinito de superficies: no usa el catálogo fijo de SurfaceShapes.all.
+     * N crece cada 3 niveles (tope 12) y alterna entre las dos familias paramétricas
+     * (hipPyramid / diagonalRamp), ambas garantizadas sin solapamientos para cualquier N.
+     * No marca progreso persistente (igual que loadDuoCube/loadEmptyCube): es infinito,
+     * no hay "nivel completado" que guardar en disco.
+     */
+    fun loadInfiniteSurfaceLevel(index: Int, seed: Long) {
+        currentLevelId = null
+        currentDailyEpochDay = null
+        currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            runCatching {
+                val n = (3 + index / 3).coerceAtMost(12)
+                val model = if (index % 2 == 0) {
+                    com.hoshiraflow.domain.model.SurfaceShapes.hipPyramid(n)
+                } else {
+                    com.hoshiraflow.domain.model.SurfaceShapes.diagonalRamp(n)
+                }
+                val numColors = (model.faces.size / 6).coerceIn(3, PuzzleColor.entries.size)
+                var board: Board? = null
+                for (attempt in 0 until 40) {
+                    board = com.hoshiraflow.domain.usecase.GenerateSurfaceLevelUseCase()
+                        .invoke(model, seed = seed + attempt, numColors = numColors)
+                    if (board != null) break
+                }
+                board ?: error("No se pudo generar nivel infinito de superficie (n=$n)")
+            }.onSuccess { board ->
+                _uiState.value = GameUiState(isLoading = false, board = board)
+                startTime = System.currentTimeMillis()
+            }.onFailure { e ->
+                _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
+            }
+        }
+    }
+
     fun loadInfiniteLevel(levelId: Int, seed: Long, shape: com.hoshiraflow.domain.model.BoardShape? = null) {
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -157,6 +215,8 @@ class GameViewModel(
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -177,6 +237,8 @@ class GameViewModel(
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -197,6 +259,8 @@ class GameViewModel(
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -217,6 +281,8 @@ class GameViewModel(
         currentLevelId = levelId
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -242,6 +308,8 @@ class GameViewModel(
         currentLevelId = null
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching { com.hoshiraflow.domain.usecase.GenerateCubeLevelUseCase().invoke(seed = 777L, index = levelId, n = n, blocks = 2) }
@@ -254,6 +322,8 @@ class GameViewModel(
         currentLevelId = null
         currentDailyEpochDay = null
         currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = null
         viewModelScope.launch {
             _uiState.value = GameUiState(isLoading = true)
             runCatching {
@@ -268,6 +338,105 @@ class GameViewModel(
                 _uiState.value = GameUiState(isLoading = false, errorMessage = e.message)
             }
         }
+    }
+
+    /**
+     * Arranca Resistencia o Sprint 60. El reloj corre siempre, sin pausas, desde que
+     * se arma el primer tablero hasta que llega a 0 (se detiene solo mientras genera
+     * el siguiente nivel, lo cual es prácticamente instantáneo).
+     */
+    fun loadTimedMode(type: com.hoshiraflow.domain.model.TimedModeType, seed: Long) {
+        currentLevelId = null
+        currentDailyEpochDay = null
+        currentSurfaceKey = null
+        timedJob?.cancel()
+        timedType = type
+        timedRandom = kotlin.random.Random(seed)
+        timedElapsedSeconds = 0
+
+        val initialMs = when (type) {
+            is com.hoshiraflow.domain.model.TimedModeType.Resistencia -> when (type.difficulty) {
+                com.hoshiraflow.domain.model.TimedDifficulty.FACIL,
+                com.hoshiraflow.domain.model.TimedDifficulty.MEDIO -> 5 * 60_000L
+                com.hoshiraflow.domain.model.TimedDifficulty.DIFICIL -> 4 * 60_000L
+                com.hoshiraflow.domain.model.TimedDifficulty.EXTREMO -> 3 * 60_000L
+            }
+            com.hoshiraflow.domain.model.TimedModeType.Sprint60 -> 45_000L
+        }
+        // Resistencia no suma tiempo, así que su "techo" es el mismo arranque fijo.
+        timedCapMs = if (type is com.hoshiraflow.domain.model.TimedModeType.Sprint60) 60_000L else initialMs
+
+        viewModelScope.launch {
+            _uiState.value = GameUiState(isLoading = true)
+            val bestScore = progressRepository.observeTimedBestScore(type.storageKey()).firstOrNull() ?: 0
+            val level = generateTimedLevel.next(type, elapsedSeconds = 0, levelsSolved = 0, random = timedRandom)
+            _uiState.value = GameUiState(
+                isLoading = false,
+                board = level.board,
+                timedRemainingMs = initialMs,
+                timedScore = 0,
+                timedLevelsSolved = 0,
+                timedBestScore = bestScore
+            )
+            startTime = System.currentTimeMillis()
+            startTimedCountdown(initialMs)
+        }
+    }
+
+    private fun startTimedCountdown(initialMs: Long) {
+        timedJob = viewModelScope.launch {
+            var remaining = initialMs
+            val tick = 100L
+            while (remaining > 0 && timedType != null) {
+                delay(tick)
+                remaining = (remaining - tick).coerceAtLeast(0)
+                timedElapsedSeconds = ((timedCapMs - remaining).coerceAtLeast(0) / 1000).toInt()
+                _uiState.value = _uiState.value.copy(timedRemainingMs = remaining)
+            }
+            if (timedType != null) finishTimedMode()
+        }
+    }
+
+    private fun finishTimedMode() {
+        timedJob?.cancel()
+        val type = timedType ?: return
+        val finalScore = _uiState.value.timedScore
+        _uiState.value = _uiState.value.copy(timedFinished = true, timedRemainingMs = 0)
+        viewModelScope.launch {
+            progressRepository.saveTimedBestScoreIfHigher(type.storageKey(), finalScore)
+        }
+    }
+
+    /** Llamado desde checkProgress en vez del flujo normal cuando estamos en modo cronometrado. */
+    private fun advanceTimedMode() {
+        val type = timedType ?: return
+        val colors = _uiState.value.board?.nodes?.map { it.color }?.distinct()?.size ?: 0
+        val points = colors * 10
+        val newScore = _uiState.value.timedScore + points
+        val newLevelsSolved = _uiState.value.timedLevelsSolved + 1
+
+        val level = generateTimedLevel.next(
+            type,
+            elapsedSeconds = timedElapsedSeconds,
+            levelsSolved = newLevelsSolved,
+            random = timedRandom
+        )
+        val newRemaining = if (type is com.hoshiraflow.domain.model.TimedModeType.Sprint60) {
+            ((_uiState.value.timedRemainingMs ?: 0L) + level.timeBonusMs).coerceAtMost(timedCapMs)
+        } else {
+            _uiState.value.timedRemainingMs
+        }
+
+        _uiState.value = _uiState.value.copy(
+            board = level.board,
+            connectedColors = emptySet(),
+            activeColor = null,
+            isLevelComplete = false,
+            timedScore = newScore,
+            timedLevelsSolved = newLevelsSolved,
+            timedRemainingMs = newRemaining
+        )
+        startTime = System.currentTimeMillis()
     }
 
     fun onNodeTouched(color: PuzzleColor, cell: Cell) {
@@ -320,14 +489,20 @@ class GameViewModel(
             when (result) {
                 is ValidateMoveUseCase.Result.Extend -> {
                     board = board.withPath(color, result.newPath)
-                    checkProgress(board, color, cell)
+                    // FIX: checkProgress puede disparar advanceTimedMode() y dejar un
+                    // tablero NUEVO en _uiState.value. Si eso pasó, hay que salir ya
+                    // mismo: la línea de abajo (_uiState.value = ...copy(board=board))
+                    // seguía pisando ese tablero nuevo con esta variable local vieja
+                    // (el nivel que acaba de resolverse), y el reloj seguía corriendo
+                    // sin que nunca se viera/jugara el siguiente nivel.
+                    if (checkProgress(board, color, cell)) return
                     // If we just connected the color, stop dragging for this batch
                     if (color in _uiState.value.connectedColors) break
                 }
                 is ValidateMoveUseCase.Result.MutateColor -> {
                     // Actualizamos el tablero con el camino hasta el interruptor
                     board = board.withPath(color, result.newPath)
-                    checkProgress(board, color, cell)
+                    if (checkProgress(board, color, cell)) return
                     
                     // Mutamos el color activo para que el drag continúe con el nuevo color
                     _uiState.value = _uiState.value.copy(
@@ -340,7 +515,7 @@ class GameViewModel(
                 }
                 is ValidateMoveUseCase.Result.Retreat -> {
                     board = board.withPath(color, result.newPath)
-                    checkProgress(board, color, cell)
+                    if (checkProgress(board, color, cell)) return
                 }
                 ValidateMoveUseCase.Result.Invalid -> {
                     viewModelScope.launch { _events.emit(GameEvent.InvalidMove) }
@@ -377,7 +552,8 @@ class GameViewModel(
         startTime = System.currentTimeMillis()
     }
 
-    private fun checkProgress(board: Board, color: PuzzleColor, atCell: Cell?) {
+    /** @return true si se acaba de cambiar a un tablero nuevo de modo cronometrado. */
+    private fun checkProgress(board: Board, color: PuzzleColor, atCell: Cell?): Boolean {
         val isConnected = checkComplete.isColorConnected(board, color)
         val wasConnected = color in _uiState.value.connectedColors
 
@@ -395,6 +571,15 @@ class GameViewModel(
         }
 
         val isLevelComplete = checkComplete.isLevelComplete(board)
+
+        if (isLevelComplete && timedType != null) {
+            // Modo cronometrado: sin overlay de "¡Completado!" ni ripple (se comen
+            // segundos) — pasa directo al siguiente tablero. El burst de partículas
+            // por color (ColorCompleted) ya se emitió arriba, así que sigue habiendo
+            // feedback visual en cada línea.
+            advanceTimedMode()
+            return true
+        }
 
         if (isLevelComplete && !_uiState.value.isLevelComplete) {
             val elapsed = System.currentTimeMillis() - startTime
@@ -418,6 +603,12 @@ class GameViewModel(
         } else {
             _uiState.value = _uiState.value.copy(connectedColors = newConnectedColors)
         }
+        return false
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        timedJob?.cancel()
     }
 }
 

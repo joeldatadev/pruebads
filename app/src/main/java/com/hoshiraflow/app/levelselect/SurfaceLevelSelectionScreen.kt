@@ -49,7 +49,10 @@ val SurfaceShapesList = listOf(
     SurfaceShapeItem("Escalera", "🪜", "Rampa diagonal en desnivel continuo"),
     SurfaceShapeItem("Pirámide", "🏔️", "Pico en una esquina, base escalonada"),
     SurfaceShapeItem("Zigurat", "🛕", "Terrazas anchas tipo templo"),
-    SurfaceShapeItem("Rampa", "🛹", "Pasillo largo en descenso")
+    SurfaceShapeItem("Rampa", "🛹", "Pasillo largo en descenso"),
+    SurfaceShapeItem("Plaza", "🏟️", "Pirámide con una esquina recortada"),
+    SurfaceShapeItem("Cresta", "⛰️", "Pico alargado, más empinado de un lado"),
+    SurfaceShapeItem("Terrazas", "🧱", "Escalones de ancho desigual")
 )
 
 @Composable
@@ -58,6 +61,7 @@ fun SurfaceLevelSelectionScreen(
     progressRepository: ProgressRepository,
     dailyChallengeRepository: DailyChallengeRepository,
     onLevelSelected: (shapeIndex: Int, levelId: Int) -> Unit,
+    onInfiniteSelected: (() -> Unit)? = null,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -84,7 +88,8 @@ fun SurfaceLevelSelectionScreen(
         SurfaceHeader(
             completedCount = completedForCurrentShape.size,
             totalCount = totalLevels,
-            onBack = onBack
+            onBack = onBack,
+            onInfiniteSelected = onInfiniteSelected
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -174,21 +179,40 @@ fun SurfaceLevelSelectionScreen(
 private fun SurfaceHeader(
     completedCount: Int,
     totalCount: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onInfiniteSelected: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF334155).copy(alpha = 0.5f))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF334155).copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
+            }
+
+            if (onInfiniteSelected != null) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF6366F1))
+                        .clickable(onClick = onInfiniteSelected)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("∞ Infinito", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))

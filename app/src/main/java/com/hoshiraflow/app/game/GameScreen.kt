@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Pause
@@ -73,6 +76,7 @@ import com.hoshiraflow.domain.repository.GameSettings
 import com.hoshiraflow.domain.repository.LevelRepository
 import com.hoshiraflow.domain.repository.ProgressRepository
 import com.hoshiraflow.domain.repository.SettingsRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -94,6 +98,9 @@ fun GameScreen(
     isCubeCampaign: Boolean = false,
     isEmptyCube: Boolean = false,
     surfaceShapeIndex: Int? = null,
+    infiniteSurfaceSeed: Long? = null,
+    timedModeType: com.hoshiraflow.domain.model.TimedModeType? = null,
+    timedSeed: Long? = null,
     onNextLevel: () -> Unit = {},
     onBackToLevelSelect: () -> Unit = {},
     onLevelRestarted: () -> Unit = {},
@@ -101,7 +108,7 @@ fun GameScreen(
     modifier: Modifier = Modifier
 ) {
     val viewModel: GameViewModel = viewModel(
-        key = "level=$levelId-infinite=$infiniteSeed-daily=$dailyEpochDay-portal=$portalSeed-switch=$switchSeed-master=$masterSeed-surface=$surfaceShapeIndex-ishape=$infiniteShape-pshape=$portalShape-sshape=$switchShape-mshape=$masterShape",
+        key = "level=$levelId-infinite=$infiniteSeed-daily=$dailyEpochDay-portal=$portalSeed-switch=$switchSeed-master=$masterSeed-surface=$surfaceShapeIndex-isurface=$infiniteSurfaceSeed-timed=$timedModeType-tseed=$timedSeed-ishape=$infiniteShape-pshape=$portalShape-sshape=$switchShape-mshape=$masterShape",
         factory = GameViewModelFactory(levelRepository, progressRepository, dailyChallengeRepository)
     )
     val uiState by viewModel.uiState.collectAsState()
@@ -116,7 +123,7 @@ fun GameScreen(
         hapticController.enabled = settings.hapticsEnabled
     }
 
-    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isCubeCampaign, isEmptyCube, surfaceShapeIndex) {
+    LaunchedEffect(levelId, infiniteSeed, dailyEpochDay, portalSeed, switchSeed, masterSeed, isCubeCampaign, isEmptyCube, surfaceShapeIndex, infiniteSurfaceSeed, timedModeType, timedSeed) {
         val selectedShape: com.hoshiraflow.domain.model.BoardShape? = when {
             infiniteSeed != null -> infiniteShape
             portalSeed != null -> portalShape
@@ -126,7 +133,9 @@ fun GameScreen(
         }
         when {
             dailyEpochDay != null -> viewModel.loadDailyChallenge(dailyEpochDay)
+            timedModeType != null && timedSeed != null -> viewModel.loadTimedMode(timedModeType, timedSeed)
             surfaceShapeIndex != null -> viewModel.loadSurfaceLevel(surfaceShapeIndex, levelId)
+            infiniteSurfaceSeed != null -> viewModel.loadInfiniteSurfaceLevel(levelId, infiniteSurfaceSeed)
             isEmptyCube -> viewModel.loadDuoCube(levelId)
             isCubeCampaign -> viewModel.loadCubeLevel(levelId)
             infiniteSeed != null -> viewModel.loadInfiniteLevel(levelId, infiniteSeed, selectedShape)
@@ -142,6 +151,13 @@ fun GameScreen(
     val rippleProgress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
+    // Modo cronometrado: cada color, al desvanecerse (ver drawPaths/drawNodes), "explota"
+    // y deja de pintarse — se reinicia por completo en cada nivel nuevo (timedLevelsSolved
+    // cambia) para que un color ya limpiado en el tablero anterior no nazca invisible.
+    val timedClearAlpha = remember(uiState.timedLevelsSolved) {
+        mutableStateMapOf<PuzzleColor, Animatable<Float, AnimationVector1D>>()
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
@@ -156,6 +172,10 @@ fun GameScreen(
                         particles[burstId]?.progress?.animateTo(1f, tween(500, easing = LinearEasing))
                         particles.remove(burstId)
                     }
+                    // Se probó que la línea desapareciera sola al completar un color,
+                    // pero se ve raro con el fondo de la casilla quedándose quieto —
+                    // se desactiva por ahora (queda la infraestructura por si se retoma
+                    // más adelante con el fondo también desapareciendo).
                 }
                 GameEvent.LevelCompleted -> {
                     hapticController.onLevelComplete()
@@ -203,25 +223,54 @@ fun GameScreen(
                             Icon(Icons.Filled.Pause, contentDescription = "Pausa", tint = Color.White)
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (dailyEpochDay != null) {
-                                Text("🔥 Daily ", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
-                            } else {
-                                Text("Nivel $levelId ", color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
+                        if (timedModeType != null) {
+                            val remainingMs = uiState.timedRemainingMs ?: 0L
+                            val totalSec = (remainingMs / 1000).toInt()
+                            val timeLabel = "%d:%02d".format(totalSec / 60, totalSec % 60)
+                            val urgent = remainingMs in 1..10_000L
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    progressText,
-                                    color = Color(0xFF10B981),
+                                    "⏱ $timeLabel",
+                                    color = if (urgent) Color(0xFFEF4444) else Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 18.sp
                                 )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                        .background(Color(0xFFF59E0B).copy(alpha = 0.15f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "★ ${uiState.timedScore}",
+                                        color = Color(0xFFF59E0B),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (dailyEpochDay != null) {
+                                    Text("🔥 Daily ", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text("Nivel $levelId ", color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        progressText,
+                                        color = Color(0xFF10B981),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
                         }
 
@@ -248,6 +297,7 @@ fun GameScreen(
                             nodeScales = nodeScales,
                             particles = particles.values.toList(),
                             rippleProgress = rippleProgress.value,
+                            colorClearAlpha = timedClearAlpha,
                             onNodeTouched = { color, cell ->
                                 hapticController.onNodeTouch()
                                 scope.launch { animatePulse(nodeScales, cell) }
@@ -288,8 +338,19 @@ fun GameScreen(
                             onClearColor = { color -> viewModel.clearColorPath(color) }
                         )
 
+                        if (timedModeType != null) {
+                            TimedResultsOverlay(
+                                visible = uiState.timedFinished,
+                                score = uiState.timedScore,
+                                bestScore = maxOf(uiState.timedScore, uiState.timedBestScore),
+                                levelsSolved = uiState.timedLevelsSolved,
+                                isNewBest = uiState.timedScore > uiState.timedBestScore,
+                                onBackToLevelSelect = onBackToLevelSelect
+                            )
+                        }
+
                         LevelCompleteOverlay(
-                            visible = uiState.isLevelComplete,
+                            visible = uiState.isLevelComplete && timedModeType == null,
                             elapsedMs = uiState.elapsedMs,
                             onNextLevel = onNextLevel,
                             onBackToLevelSelect = onBackToLevelSelect
@@ -343,7 +404,8 @@ private fun BoardLayers(
     onNodeTouched: (PuzzleColor, Cell) -> Unit,
     onDrag: (List<Cell>) -> Unit,
     onDragEnd: () -> Unit,
-    onClearColor: (PuzzleColor) -> Unit
+    onClearColor: (PuzzleColor) -> Unit,
+    colorClearAlpha: Map<PuzzleColor, Animatable<Float, AnimationVector1D>> = emptyMap()
 ) {
     var cellWidthPx by remember { mutableFloatStateOf(0f) }
     var cellHeightPx by remember { mutableFloatStateOf(0f) }
@@ -507,7 +569,7 @@ private fun BoardLayers(
                 cellHeightPx = size.height / board.height
                 cellSizePx = kotlin.math.min(cellWidthPx, cellHeightPx)
             }
-            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = true, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
+            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = true, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry, colorClearAlpha)
         }
 
         Canvas(
@@ -518,6 +580,12 @@ private fun BoardLayers(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val downCell = offsetToCell(down.position)
                         val now = System.currentTimeMillis()
+                        // Modo cronometrado: si el nivel cambia a mitad de este gesto
+                        // (advanceTimedMode corre dentro del mismo drag), el arrastre
+                        // debe soltarse en vez de seguir aplicando pasos calculados
+                        // contra el tablero viejo sobre el tablero nuevo — eso dejaba
+                        // "pegado" el táctil tras cada nivel resuelto a mitad de drag.
+                        val gestureNodes = currentBoardState.nodes
 
                         var touchedColor: PuzzleColor? = null
                         var lastTrackedCell: Cell? = null
@@ -550,6 +618,7 @@ private fun BoardLayers(
 
                         drag(down.id) { change ->
                             change.consume()
+                            if (currentBoardState.nodes !== gestureNodes) return@drag
                             val clamped = clampToBoard(change.position)
                             dragPosition = clamped
 
@@ -621,8 +690,8 @@ private fun BoardLayers(
             }
 
             drawGrid(board, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
-            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = false, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
-            drawNodes(board, connectedColors, nodeScales, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
+            drawPaths(board, cellWidthPx, cellHeightPx, cellSizePx, glow = false, activeColor, dragPosition, pathMap, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry, colorClearAlpha)
+            drawNodes(board, connectedColors, nodeScales, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry, colorClearAlpha)
             drawParticles(particles, board, cellWidthPx, cellHeightPx, cellSizePx, layoutWidth, layoutHeight, surfaceGeometry)
             if (rippleProgress in 0f..1f && rippleProgress > 0f) {
                 drawRipple(board, cellWidthPx, cellHeightPx, cellSizePx, rippleProgress)
@@ -870,8 +939,25 @@ private fun DrawScope.drawPaths(
     layoutHeight: Float,
     cubeOriginX: Float = 0f,
     cubeOriginY: Float = 0f,
-    surfaceGeometry: SurfaceGeometry? = null
+    surfaceGeometry: SurfaceGeometry? = null,
+    colorClearAlpha: Map<PuzzleColor, Animatable<Float, AnimationVector1D>> = emptyMap()
 ) {
+    // Modo cronometrado: una vez que un color conecta, su línea se desvanece y deja
+    // de dibujarse (efecto "explota y desaparece", como Buscaminas/Tetris) en vez de
+    // quedarse pintada hasta que se completa el tablero entero.
+    fun strokePath(path: Path, pathColor: PuzzleColor) {
+        val clear = colorClearAlpha[pathColor]?.value ?: 1f
+        if (clear <= 0.001f) return
+        val baseColor = pathColor.toComposeColor()
+        val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
+        val baseAlpha = if (glow) 0.55f else 1f
+        drawPath(
+            path = path,
+            color = baseColor.copy(alpha = baseAlpha * clear),
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+
     var pathCount = 0
     board.paths.forEach { (color, cells) ->
         val isActiveDrag = color == activeColor && dragPosition != null && cells.isNotEmpty()
@@ -911,15 +997,7 @@ private fun DrawScope.drawPaths(
 
             if (currentColor != pathColor || isPortalJump) {
                 if (pathHasPoints) {
-                    val baseColor = pathColor.toComposeColor()
-                    val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
-                    val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
-
-                    drawPath(
-                        path = currentPath,
-                        color = drawColor,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
+                    strokePath(currentPath, pathColor)
                 }
 
                 currentPath = pathMap.getOrPut(pathCount++) { Path() }
@@ -963,15 +1041,7 @@ private fun DrawScope.drawPaths(
 
             if (currentColor != pathColor) {
                 if (pathHasPoints) {
-                    val baseColor = pathColor.toComposeColor()
-                    val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
-                    val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
-
-                    drawPath(
-                        path = currentPath,
-                        color = drawColor,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
+                    strokePath(currentPath, pathColor)
                 }
 
                 currentPath = pathMap.getOrPut(pathCount++) { Path() }
@@ -1001,15 +1071,7 @@ private fun DrawScope.drawPaths(
         }
 
         if (pathHasPoints) {
-            val baseColor = pathColor.toComposeColor()
-            val strokeWidth = if (glow) cellSize * 0.55f else cellSize * 0.28f
-            val drawColor = if (glow) baseColor.copy(alpha = 0.55f) else baseColor
-
-            drawPath(
-                path = currentPath,
-                color = drawColor,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+            strokePath(currentPath, pathColor)
         }
     }
 }
@@ -1025,13 +1087,20 @@ private fun DrawScope.drawNodes(
     layoutHeight: Float,
     cubeOriginX: Float = 0f,
     cubeOriginY: Float = 0f,
-    surfaceGeometry: SurfaceGeometry? = null
+    surfaceGeometry: SurfaceGeometry? = null,
+    colorClearAlpha: Map<PuzzleColor, Animatable<Float, AnimationVector1D>> = emptyMap()
 ) {
     board.nodes.forEach { node ->
+        val clear = colorClearAlpha[node.color]?.value ?: 1f
+        if (clear <= 0.001f) return@forEach
         val center = cellCenter(node.cell, cellWidth, cellHeight, cellSize, board, layoutWidth, layoutHeight, cubeOriginX, cubeOriginY, surfaceGeometry)
         val baseRadius = if (node.color in connectedColors) cellSize * 0.38f else cellSize * 0.32f
         val scale = nodeScales[node.cell]?.value ?: 1f
-        drawCircle(color = node.color.toComposeColor(), radius = baseRadius * scale, center = center)
+        drawCircle(
+            color = node.color.toComposeColor().copy(alpha = clear),
+            radius = baseRadius * scale * (0.4f + 0.6f * clear),
+            center = center
+        )
     }
 }
 

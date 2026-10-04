@@ -55,6 +55,10 @@ private val MasterGradient = Brush.linearGradient(
     colors = listOf(Color(0xFFFFD700), Color(0xFF990000))
 )
 
+private val TimedGradient = Brush.linearGradient(
+    colors = listOf(Color(0xFFEF4444), Color(0xFF7C3AED))
+)
+
 
 
 @Composable
@@ -70,7 +74,8 @@ fun MainMenuScreen(
     onMasterModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onInfiniteModeSelected: (com.hoshiraflow.domain.model.BoardShape?) -> Unit = {},
     onCubeModeSelected: () -> Unit = {},
-    onEmptyCubeSelected: () -> Unit = {}
+    onEmptyCubeSelected: () -> Unit = {},
+    onTimedModeSelected: () -> Unit = {}
 ) {
     val viewModel: LevelSelectViewModel = viewModel(
         factory = LevelSelectViewModelFactory(levelRepository, progressRepository, dailyChallengeRepository)
@@ -186,6 +191,46 @@ fun MainMenuScreen(
                 gradient = InfiniteGradient,
                 onClick = { onInfiniteModeSelected(selectedShape) }
             )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Card: Contra Reloj (Resistencia / Sprint 60) — full width, mismo peso visual que Maestro.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(TimedGradient)
+                .clickable(onClick = onTimedModeSelected)
+                .padding(20.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.Timer, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
+                        Text(text = "Contra Reloj", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Resistencia o Sprint 60 — ¿cuánto aguantas?", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    }
+                }
+                Icon(Icons.Filled.Bolt, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

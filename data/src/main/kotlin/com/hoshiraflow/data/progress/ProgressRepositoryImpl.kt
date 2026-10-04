@@ -27,4 +27,10 @@ class ProgressRepositoryImpl(
     override suspend fun markSurfaceLevelCompleted(key: String) {
         dataStore.addCompletedSurfaceLevel(key)
     }
+
+    override fun observeTimedBestScore(key: String): Flow<Int> = dataStore.observeTimedBestScore(key)
+
+    override suspend fun saveTimedBestScoreIfHigher(key: String, score: Int) {
+        dataStore.saveTimedBestScoreIfHigher(key, score)
+    }
 }

@@ -156,6 +156,28 @@ object SurfaceShapes {
         return SurfaceModel(vs)
     }
 
+    fun hipPyramid(n: Int): SurfaceModel {
+        val vs = mutableSetOf<Voxel>()
+        for (y in 0 until n) {
+            for (x in 0 until n) {
+                val h = (n - 1 - maxOf(x, y)).coerceAtLeast(0)
+                for (z in 0 until h) vs.add(Voxel(x, y, z))
+            }
+        }
+        return SurfaceModel(vs)
+    }
+
+    fun diagonalRamp(n: Int): SurfaceModel {
+        val vs = mutableSetOf<Voxel>()
+        for (y in 0 until n) {
+            for (x in 0 until n) {
+                val h = (n - x - y).coerceAtLeast(0)
+                for (z in 0 until h) vs.add(Voxel(x, y, z))
+            }
+        }
+        return SurfaceModel(vs)
+    }
+
     // Principio general: cualquier altura(x,y) que sea NO CRECIENTE al alejarse del
     // origen (0,0) tanto en x como en y por separado queda garantizada sin solapamientos
     // de caras (verificado con intersección de polígonos, 0 pares en las 4 formas de abajo).
@@ -164,11 +186,17 @@ object SurfaceShapes {
     val PYRAMID = fromHeightMap(listOf("43210", "33210", "22210", "11110", "00000"))
     val ZIGGURAT = fromHeightMap(listOf("22110", "22110", "11110", "11110", "00000"))
     val RAMP = fromHeightMap(listOf("43210000", "43210000", "43210000", "43210000"))
+    // Pirámide con una esquina recortada a nivel 0 (silueta de "plaza con desnivel").
+    val PLAZA = fromHeightMap(listOf("43210", "33210", "22210", "11100", "00000"))
+    // Pico alargado: sube el doble de rápido en y que en x (cresta asimétrica, no un cono).
+    val CRESTA = fromHeightMap(listOf("543210000", "333210000", "111110000", "000000000", "000000000"))
+    // Mismos escalones que RAMP pero con anchos desiguales (1,2,1,2 celdas) en vez de parejos.
+    val TERRAZAS = fromHeightMap(listOf("433211", "433211", "433211"))
 
     /**
      * Orden estable usado como `shapeIndex` en LevelRepository.getSurfaceLevel y en
-     * SurfaceLevelSelectionScreen.SurfaceShapesList (Escalera, Pirámide, Zigurat, Rampa).
-     * Si agregas una forma nueva, agrégala aquí Y a SurfaceShapesList en el mismo índice.
+     * SurfaceLevelSelectionScreen.SurfaceShapesList. Si agregas una forma nueva,
+     * agrégala aquí Y a SurfaceShapesList en el mismo índice.
      */
-    val all: List<SurfaceModel> = listOf(STAIRS, PYRAMID, ZIGGURAT, RAMP)
+    val all: List<SurfaceModel> = listOf(STAIRS, PYRAMID, ZIGGURAT, RAMP, PLAZA, CRESTA, TERRAZAS)
 }

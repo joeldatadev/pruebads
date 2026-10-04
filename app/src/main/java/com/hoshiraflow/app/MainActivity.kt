@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import com.hoshiraflow.app.levelselect.LevelSelectionScreen
 import com.hoshiraflow.app.levelselect.SurfaceLevelSelectionScreen
+import com.hoshiraflow.app.timedmode.TimedModeSelectScreen
 import com.hoshiraflow.app.mainmenu.MainMenuScreen
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.ads.MobileAds
@@ -60,6 +61,9 @@ private sealed class Screen {
     object Settings : Screen()
     object SurfaceLevelSelection : Screen()
     data class SurfaceCampaign(val shapeIndex: Int, val levelId: Int) : Screen()
+    data class InfiniteSurface(val index: Int, val seed: Long) : Screen()
+    object TimedModeSelect : Screen()
+    data class TimedMode(val type: com.hoshiraflow.domain.model.TimedModeType, val seed: Long) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -303,6 +307,9 @@ class MainActivity : ComponentActivity() {
                                         onLevelSelected = { shapeIndex, levelId ->
                                             screen = Screen.SurfaceCampaign(shapeIndex, levelId)
                                         },
+                                        onInfiniteSelected = {
+                                            screen = Screen.InfiniteSurface(index = 1, seed = System.currentTimeMillis())
+                                        },
                                         onBack = { screen = Screen.MainMenu }
                                     )
                                 }
@@ -320,6 +327,61 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onBackToLevelSelect = { screen = Screen.SurfaceLevelSelection },
                                         onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                is Screen.InfiniteSurface -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    GameScreen(
+                                        levelId = current.index,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
+                                        infiniteSurfaceSeed = current.seed,
+                                        onNextLevel = {
+                                            proceedOrShowAd(7, 7) {
+                                                screen = Screen.InfiniteSurface(current.index + 1, System.currentTimeMillis())
+                                            }
+                                        },
+                                        onBackToLevelSelect = { screen = Screen.SurfaceLevelSelection },
+                                        onLevelRestarted = { onRestarted() },
+                                        onGoToMainMenu = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                Screen.TimedModeSelect -> {
+                                    BackHandler { screen = Screen.MainMenu }
+                                    TimedModeSelectScreen(
+                                        progressRepository = progressRepository,
+                                        onResistenciaSelected = { difficulty ->
+                                            screen = Screen.TimedMode(
+                                                type = com.hoshiraflow.domain.model.TimedModeType.Resistencia(difficulty),
+                                                seed = System.currentTimeMillis()
+                                            )
+                                        },
+                                        onSprint60Selected = {
+                                            screen = Screen.TimedMode(
+                                                type = com.hoshiraflow.domain.model.TimedModeType.Sprint60,
+                                                seed = System.currentTimeMillis()
+                                            )
+                                        },
+                                        onBack = { screen = Screen.MainMenu }
+                                    )
+                                }
+                                is Screen.TimedMode -> {
+                                    // Sin BackHandler a MainMenu directo: que confirme que quiere
+                                    // salir a mitad de un desafío cronometrado (evita perder el
+                                    // puntaje por un back accidental). Vuelve a la selección.
+                                    BackHandler { screen = Screen.TimedModeSelect }
+                                    GameScreen(
+                                        levelId = 1,
+                                        levelRepository = levelRepository,
+                                        progressRepository = progressRepository,
+                                        dailyChallengeRepository = dailyChallengeRepository,
+                                        settingsRepository = settingsRepository,
+                                        timedModeType = current.type,
+                                        timedSeed = current.seed,
+                                        onBackToLevelSelect = { screen = Screen.TimedModeSelect },
                                         onGoToMainMenu = { screen = Screen.MainMenu }
                                     )
                                 }
@@ -343,7 +405,8 @@ class MainActivity : ComponentActivity() {
                                         screen = Screen.Master(index = 1, seed = System.currentTimeMillis(), shape = shape)
                                     },
                                     onCubeModeSelected = { screen = Screen.CubeLevelSelection },
-                                    onEmptyCubeSelected = { screen = Screen.SurfaceLevelSelection }
+                                    onEmptyCubeSelected = { screen = Screen.SurfaceLevelSelection },
+                                    onTimedModeSelected = { screen = Screen.TimedModeSelect }
                                 )
                             }
                         }
